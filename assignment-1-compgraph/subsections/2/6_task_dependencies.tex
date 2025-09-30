@@ -1,0 +1,13 @@
+﻿\subsection{Task Dependencies and Recommended Order}
+
+The tasks should be completed in this order due to dependencies:
+
+\begin{enumerate}
+    \item \textbf{Task 5} (Alpha Compositing) - Required by \texttt{fill\_sample()}
+    \item \textbf{Task 2} (Supersampling) - Provides \texttt{fill\_sample()} used by all rasterization
+    \item \textbf{Task 0} (Line Rasterization) - Simplest primitive to test anti-aliasing
+    \item \textbf{Task 1} (Triangle Rasterization) - Core primitive for complex shapes
+    \item \textbf{Task 3} (Transform Hierarchy) - System integration
+    \item \textbf{Task 4} (Image Rasterization) - Most complex, requires all previous components
+\end{enumerate}
+

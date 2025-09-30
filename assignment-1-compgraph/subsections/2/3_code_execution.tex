@@ -1,0 +1,35 @@
+﻿\subsection{Detailed Code Execution Flow}
+
+\subsubsection{Main Rendering Loop}
+When a user opens an SVG file, the system follows this execution path:
+
+\begin{enumerate}
+    \item \textbf{File Loading}: \texttt{SVGParser.load(filename)} reads and parses the SVG
+    \item \textbf{Renderer Setup}: Create sample and pixel buffers based on screen size and sample rate
+    \item \textbf{Clear Buffers}: Initialize buffers to background color
+    \item \textbf{Element Traversal}: Call \texttt{draw\_element()} on root SVG element
+    \item \textbf{Recursive Rendering}: Each element processes its children recursively
+    \item \textbf{Final Resolve}: Call \texttt{resolve()} to convert sample buffer to displayable pixels
+    \item \textbf{GUI Update}: Display the rendered image in the interface
+\end{enumerate}
+
+\subsubsection{Transform Stack Management}
+The transform hierarchy works as follows:
+
+\begin{enumerate}
+    \item Push current transformation matrix onto stack
+    \item Multiply current matrix with element's local transform
+    \item Render element with accumulated transformation
+    \item For group elements, recursively process children
+    \item Pop transformation matrix to restore previous state
+\end{enumerate}
+
+\subsubsection{Coordinate Space Conversions}
+The rendering pipeline uses multiple coordinate systems:
+
+\begin{enumerate}
+    \item \textbf{SVG Coordinates}: Original coordinates from SVG file
+    \item \textbf{World Coordinates}: After applying modeling transformations
+    \item \textbf{Screen Coordinates}: After applying viewport transformation (integer pixels)
+    \item \textbf{Sample Coordinates}: High-resolution coordinates for anti-aliasing (screen × sample\_rate)
+\end{enumerate}

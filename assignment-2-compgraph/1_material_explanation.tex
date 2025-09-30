@@ -1,0 +1,25 @@
+% Material Explanation Section for SVG Rasterizer Assignment
+% This content should be inserted into the main.tex file
+
+\section{Introduction}
+
+This assignment focuses on implementing a \textbf{Halfedge Mesh data structure} and several \textbf{mesh subdivision algorithms}, which are fundamental techniques in computer graphics for representing and refining polygonal surfaces.  
+Unlike simple vertex-face lists, the halfedge representation explicitly encodes mesh connectivity, making it efficient to traverse adjacency relationships (vertices, edges, and faces).  
+
+On top of this structure, students will implement several algorithms such as \textbf{Linear Subdivision}, \textbf{Triangulation}, \textbf{Loop Subdivision}, and \textbf{Catmull--Clark Subdivision}, enabling the conversion of coarse polygonal models into smoother and more detailed meshes.  
+Through this assignment, you will gain a deeper understanding of mesh topology, geometry processing, and the foundations of modern surface modeling.  
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{images/subdivision.png}
+    \caption{Subdivision example}
+    \label{fig:subdivision}
+\end{figure}
+
+\input{subsections/1/1_what_is_halfedge_mesh}
+
+\input{subsections/1/2_fundamental_mesh_geometry}
+
+\input{subsections/1/3_subdivision_alg}
+
+\input{subsections/1/4_topology_adjacency}

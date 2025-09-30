@@ -1,0 +1,11 @@
+﻿\subsection{System Architecture Overview}
+
+The SVG rasterizer consists of several interconnected components that work together to convert vector graphics into pixel images:
+
+\begin{enumerate}
+    \item \textbf{SVG Parser} (\texttt{svg\_parser.py}): Reads SVG files and converts them into internal data structures
+    \item \textbf{Rendering Engine} (\texttt{software\_renderer.py}): Main rasterization system that converts primitives to pixels
+    \item \textbf{Texture System} (\texttt{texture.py}): Handles image sampling and filtering
+    \item \textbf{Mathematical Utilities} (\texttt{math\_utils.py}): Vector, matrix, and color operations
+    \item \textbf{GUI Application} (\texttt{draw\_svg.py}): User interface for viewing and interacting with SVG files
+\end{enumerate}

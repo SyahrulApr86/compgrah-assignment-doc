@@ -1,0 +1,141 @@
+\subsection{What is Rasterization?}
+
+Rasterization is the process of converting geometric primitives (lines, triangles, curves) defined in continuous coordinate spaces into discrete pixels on a screen or image buffer. This process involves several key challenges:
+
+\subsubsection{Coordinate Transformation}
+
+In 2D computer graphics several coordinate systems are used in sequence. Object (local) space is where a shape is defined (for example, a unit circle at the origin). World (canvas) space places all shapes together by translation, rotation, and scaling. Normalized Device Coordinates (NDC) are a resolution-independent square \([-1,1]\times[-1,1]\) obtained after a viewing/normalization step so geometry no longer depends on pixel dimensions. Screen space consists of integer pixel coordinates \([0,W)\times[0,H)\) on the final image.
+
+All stages are affine transforms in homogeneous 2D, represented by \(3\times3\) matrices. If \(\mathbf M\) maps object\(\to\)world, \(\mathbf V\) maps world\(\to\)NDC, and \(\mathbf S\) maps NDC\(\to\)screen, then for a point \(\mathbf p=(x,y,1)^{\mathsf T}\):
+\[
+\mathbf p_{\text{screen}}=\mathbf S\,\mathbf V\,\mathbf M\,\mathbf p.
+\]
+A convenient 2D normalization is to translate the window center \((x,y)\) to the origin and scale by \(1/\text{span}\) so the square \([x-\text{span},x+\text{span}]\times[y-\text{span},y+\text{span}]\) maps to \([-1,1]^2\):
+\[
+\mathbf V_{\!2D} =
+\begin{bmatrix}
+\frac{1}{\text{span}} & 0 & -\frac{x}{\text{span}}\\[4pt]
+0 & \frac{1}{\text{span}} & -\frac{y}{\text{span}}\\[4pt]
+0 & 0 & 1
+\end{bmatrix}.
+\]
+The viewport matrix \(\mathbf S\) then maps NDC \((u,v)\in[-1,1]^2\) to pixels:
+\[
+x_{\text{pix}}=\tfrac{W}{2}(u+1),\qquad y_{\text{pix}}=\tfrac{H}{2}(v+1).
+\]
+Matrix multiplication order and the chosen row/column convention must be consistent to avoid unintended flips or offsets.
+
+Textbook/OpenGL diagrams often show \emph{local} \(\to\) \emph{world} \(\to\) \emph{view} \(\to\) \emph{clip} \(\to\) \emph{screen}. In 3D, a view matrix re-expresses coordinates in camera space and a projection matrix sends them to clip space; NDC are obtained after the perspective divide. In our 2D orthographic setting there is no perspective, so clip \(=\) NDC and the “camera” reduces to a world-window normalization. Consequently we fold view\(+\)projection into \(\mathbf V_{\!2D}\), yielding the shorter chain object \(\to\) world \(\to\) NDC \(\to\) screen used here.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\linewidth]{images/coordinate-transform.png}
+  \caption{Common 3D pipeline (local $\rightarrow$ world $\rightarrow$ view $\rightarrow$ clip $\rightarrow$ screen). 
+  In 2D orthographic rendering we fold view+projection into a single normalization \(\mathbf V_{\!2D}\), so clip \(=\) NDC and the chain simplifies to object $\rightarrow$ world $\rightarrow$ NDC $\rightarrow$ screen.}
+  \label{fig:coord-transform}
+\end{figure}
+
+\vspace{0.75em}
+\subsubsection{Primitive Decomposition}
+
+Rendering is most robust when complex 2D shapes are reduced to triangles. Any convex quadrilateral becomes two triangles; a simple (non self-intersecting) polygon can be tessellated with ear clipping. Triangles are always convex and determined by three points, so inside tests are straightforward and attribute interpolation (for colors or texture coordinates) is well behaved. Once shapes are represented as a triangle list, a single triangle routine can handle all filled geometry.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.25\linewidth]{images/ear-clipping.png}
+    \caption{Ear clipping triangulation}
+    \label{fig:placeholder}
+\end{figure}
+
+\vspace{0.75em}
+\subsubsection{Pixel Coverage}
+
+Determining whether a discrete sample lies inside a continuous triangle can be done efficiently with edge functions. For vertices \(v_0, v_1, v_2\) and any point \(p\),
+\[
+E_{ab}(p)=(p-a)\times(b-a)=(p_x-a_x)(b_y-a_y)-(p_y-a_y)(b_x-a_x).
+\]
+The signed twice-area is \(A=E_{01}(v_2)\). For each sample center \(p=(x+0.5,y+0.5)\) inside a conservative integer bounding box, evaluate \(E_{01}(p),E_{12}(p),E_{20}(p)\); if they share the sign of \(A\), the sample is inside. Barycentric coordinates follow directly,
+\[
+(\alpha,\beta,\gamma)=\tfrac{1}{A}\big(E_{12}(p),E_{20}(p),E_{01}(p)\big),\qquad \alpha+\beta+\gamma=1,
+\]
+and are useful for interpolating per-vertex attributes. Degenerate cases with \(|A|\approx 0\) are treated as empty.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=1.2, every node/.style={font=\small}]
+  % Vertices of the main triangle
+  \coordinate (v0) at (0,0);
+  \coordinate (v1) at (4,0.3);
+  \coordinate (v2) at (0.9,2.8);
+
+  % Outline and light fill of the main triangle
+  \fill[black!5] (v0)--(v1)--(v2)--cycle;
+  \draw[thick] (v0)--(v1)--(v2)--cycle;
+
+  % Interior point p
+  \coordinate (p) at (1.5,1.2);
+  \filldraw[black] (p) circle (0.05) node[above right] {$p$};
+
+  % Sub-triangles showing areas proportional to barycentric weights
+  % alpha corresponds to area opposite v0: Area(p, v1, v2)
+  \fill[blue!25, opacity=0.6] (p)--(v1)--(v2)--cycle;
+  % beta corresponds to area opposite v1: Area(p, v2, v0)
+  \fill[red!25, opacity=0.6]  (p)--(v2)--(v0)--cycle;
+  % gamma corresponds to area opposite v2: Area(p, v0, v1)
+  \fill[green!25, opacity=0.6] (p)--(v0)--(v1)--cycle;
+
+  % Re-draw main triangle border on top
+  \draw[thick] (v0)--(v1)--(v2)--cycle;
+
+  % Vertex markers and labels
+  \fill (v0) circle (0.05) node[below left] {$v_0$};
+  \fill (v1) circle (0.05) node[below right] {$v_1$};
+  \fill (v2) circle (0.05) node[above] {$v_2$};
+
+  % Annotate which area maps to which weight
+  \node[blue!60!black]  at (2.2,1.9) {$\alpha \;\propto\; \mathrm{Area}(p,v_1,v_2)$};
+  \node[red!60!black]   at (0.35,1.2) {$\beta \;\propto\; \mathrm{Area}(p,v_2,v_0)$};
+  \node[green!50!black] at (2.2,0.35) {$\gamma \;\propto\; \mathrm{Area}(p,v_0,v_1)$};
+
+  % Optional: indicate edge-function names near edges (light gray)
+  \draw[->, gray] ($(v1)!0.5!(v2)$) -- ++(0.4,0.6) node[gray, above] {$E_{12}(p)$};
+  \draw[->, gray] ($(v2)!0.5!(v0)$) -- ++(-0.7,0.2) node[gray, left] {$E_{20}(p)$};
+  \draw[->, gray] ($(v0)!0.5!(v1)$) -- ++(0.7,-0.2) node[gray, below] {$E_{01}(p)$};
+\end{tikzpicture}
+
+\vspace{2mm}
+\footnotesize
+$\displaystyle
+\alpha=\frac{\mathrm{Area}(p,v_1,v_2)}{\mathrm{Area}(v_0,v_1,v_2)},\quad
+\beta=\frac{\mathrm{Area}(p,v_2,v_0)}{\mathrm{Area}(v_0,v_1,v_2)},\quad
+\gamma=\frac{\mathrm{Area}(p,v_0,v_1)}{\mathrm{Area}(v_0,v_1,v_2)},\quad
+\alpha+\beta+\gamma=1.
+$
+\end{figure}
+
+\vspace{0.75em}
+\subsubsection{Anti-aliasing}
+
+
+Aliasing occurs when continuous geometry is sampled too coarsely, producing stair-steps (jaggies) and moiré. Supersampling anti-aliasing (SSAA) addresses this by subdividing each pixel into an \(N\times N\) grid of sub-pixel samples. Rasterization is evaluated at these sample positions; a resolve step then averages the \(N^2\) samples back into one pixel using a box reconstruction filter:
+\[
+C_{\text{pixel}}=\frac{1}{N^2}\sum_{i=1}^{N^2} C_{\text{sample},i}.
+\]
+Accurate results depend on sampling at well-defined centers, carefully converting between pixel indices and sub-sample indices (\(x_s=x\cdot N+s_x\)), and clamping indices to valid ranges to avoid out-of-bounds writes. SSAA trades additional work and memory for smoother edges and reduced artifacts.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/aliasing.png}
+    \caption{Comparison between Aliasing and using Anti-Aliasing}
+    \label{fig:placeholder}
+\end{figure}
+
+\vspace{0.75em}
+\subsubsection{Color Blending}
+
+Transparency is modeled by storing an opacity value \(\alpha\in[0,1]\) alongside color \(C\). With straight (non-premultiplied) alpha, the standard source-over composition for foreground \((C_f,\alpha_f)\) over background \((C_b,\alpha_b)\) is
+\[
+C_{\text{out}}=\alpha_f\,C_f+(1-\alpha_f)\,C_b,\qquad
+\alpha_{\text{out}}=\alpha_f+(1-\alpha_f)\,\alpha_b.
+\]
+This operation is applied per sample, and draw order determines which layers appear on top. Blending should be performed in a linear color space; any gamma correction is applied later when converting final resolved pixels for display.

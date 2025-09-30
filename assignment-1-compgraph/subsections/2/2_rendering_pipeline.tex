@@ -1,0 +1,66 @@
+﻿\subsection{Rendering Pipeline Flow}
+
+The complete rendering process follows this sequence:
+
+\begin{center}
+\texttt{SVG File} $\rightarrow$ \texttt{Parse Elements} $\rightarrow$ \texttt{Apply Transforms} $\rightarrow$ \texttt{Rasterize Primitives} $\rightarrow$ \texttt{Anti-alias} $\rightarrow$ \texttt{Display}
+\end{center}
+
+\subsubsection{Step 1: SVG Loading and Parsing}
+The system loads an SVG file and parses it into a hierarchy of elements (lines, triangles, rectangles, images, groups).
+
+\textbf{Implementation Status}: \textcolor{green}{\textbf{[COMPLETE]}} \textit{No student work required}
+
+\subsubsection{Step 2: Transform Hierarchy Processing}
+The renderer traverses the SVG element tree, applying nested transformations and drawing each element.
+
+\textbf{Student Task}: \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{draw\_element()}} - Apply hierarchical transformations and render elements based on their type.
+
+\subsubsection{Step 3: Viewport and Coordinate Transformation}
+Convert from SVG world coordinates to screen pixel coordinates using viewport transformations.
+
+\textbf{Student Task}: \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{get\_matrix()}} - Handle pan/zoom operations and coordinate space conversions.
+
+\subsubsection{Step 4: Primitive Rasterization}
+Convert geometric primitives (lines, triangles) into discrete pixels.
+
+\textbf{Student Tasks}:
+\begin{itemize}
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{rasterize\_line()}} - Bresenham's algorithm for line drawing
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{rasterize\_triangle()}} - Edge function-based triangle filling
+\end{itemize}
+
+\subsubsection{Step 5: Image and Texture Processing}
+Rasterize image elements by mapping screen pixels to texture coordinates and sampling colors.
+
+\textbf{Student Tasks}:
+\begin{itemize}
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{rasterize\_image()}} - UV mapping and inverse transformation
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement texture sampling functions}:
+    \begin{itemize}
+        \item \texttt{sample\_nearest()} - Nearest neighbor filtering
+        \item \texttt{sample\_bilinear()} - Bilinear interpolation
+        \item \texttt{sample\_trilinear()} - Trilinear filtering with mipmaps
+        \item \texttt{generate\_mips()} - Mipmap generation using box filtering
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Step 6: Anti-aliasing Pipeline}
+Use supersampling to reduce aliasing artifacts by rendering at higher resolution and downsampling.
+
+\textbf{Student Tasks}:
+\begin{itemize}
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{fill\_sample()}} - Write individual samples to high-resolution buffer
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{fill\_pixel()}} - Fill all samples belonging to a pixel
+    \item \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{resolve()}} - Downsample from sample buffer to pixel buffer using box filter
+\end{itemize}
+
+\subsubsection{Step 7: Alpha Compositing}
+Blend transparent and semi-transparent colors using alpha channel information.
+
+\textbf{Student Task}: \textcolor{red}{\textbf{[TODO]}} \textbf{Implement \texttt{alpha\_blend()}} - Standard alpha blending formula for transparency effects.
+
+\subsubsection{Step 8: Display}
+Convert the final pixel buffer to a format suitable for display in the GUI.
+
+\textbf{Implementation Status}: \textcolor{green}{\textbf{[COMPLETE]}} \textit{No student work required}

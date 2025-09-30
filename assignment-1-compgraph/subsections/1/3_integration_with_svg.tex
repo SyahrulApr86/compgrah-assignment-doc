@@ -1,0 +1,15 @@
+\subsection{Integration with SVG}
+
+Scalable Vector Graphics (SVG) provides an ideal testbed for rasterization algorithms because it contains all the fundamental primitives:
+
+\begin{itemize}
+    \item \textbf{Basic shapes}: lines, rectangles, circles, polygons
+    \item \textbf{Complex paths}: Bézier curves, arcs (simplified to line segments)
+    \item \textbf{Styling}: stroke, fill, opacity, colors
+    \item \textbf{Transformations}: translate, rotate, scale applied hierarchically
+    \item \textbf{Images}: raster images embedded within vector graphics
+\end{itemize}
+
+The SVG coordinate system uses floating-point coordinates with (0,0) at the top-left, positive X rightward, and positive Y downward, which maps naturally to screen coordinates.
+
+This foundational understanding of rasterization concepts will enable you to implement a complete 2D rendering pipeline, gaining deep insights into how graphics hardware and software systems convert mathematical descriptions of shapes into the pixels you see on screen.

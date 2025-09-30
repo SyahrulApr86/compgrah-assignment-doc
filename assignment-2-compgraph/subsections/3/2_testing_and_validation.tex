@@ -1,0 +1,19 @@
+﻿\subsection{Testing and Validation}
+
+Two meshes are provided for validation:
+\begin{itemize}
+    \item \textbf{Default Cube} – appears automatically when the program is launched
+    \item \texttt{simple\_pyramid.obj} – a low-poly pyramid included in the \texttt{meshes} folder
+\end{itemize}
+
+\textbf{Validation Procedure:}
+\begin{enumerate}
+    \item Load either the default cube or \texttt{simple\_pyramid.obj}.
+    \item Apply \textbf{Linear Subdivision} and confirm each face is split into smaller faces.
+    \item Apply \textbf{Triangulate} and verify all faces become triangles.
+    \item Apply \textbf{Loop Subdivision} (only valid on fully triangular meshes) and observe the increase in smoothness.
+    \item Apply \textbf{Catmull--Clark Subdivision} and verify quads are generated consistently.
+    \item Compare mesh statistics (vertex count, face count, edge count) before and after each operation using the \texttt{statistics()} function.
+\end{enumerate}
+
+Correctness should be verified both visually (mesh smoothness, quad/triangle structure) and numerically (surface area, volume consistency).

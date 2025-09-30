@@ -1,0 +1,30 @@
+﻿\subsection{Buffer Management System}
+
+The anti-aliasing system uses a two-buffer approach:
+
+\subsubsection{Sample Buffer}
+\begin{itemize}
+    \item \textbf{Size}: \texttt{width × sample\_rate × height × sample\_rate × 4}
+    \item \textbf{Format}: Float RGBA values in range [0,1]
+    \item \textbf{Purpose}: High-resolution rendering target
+    \item \textbf{Access}: Via \texttt{fill\_sample(x, y, color)}
+\end{itemize}
+
+\subsubsection{Pixel Buffer}  
+\begin{itemize}
+    \item \textbf{Size}: \texttt{width × height × 4}
+    \item \textbf{Format}: Uint8 RGBA values in range [0,255]
+    \item \textbf{Purpose}: Final display output
+    \item \textbf{Access}: Written by \texttt{resolve()} function
+\end{itemize}
+
+\subsubsection{Resolution Process}
+The \texttt{resolve()} function performs box filter averaging:
+
+\begin{enumerate}
+    \item For each pixel in the output image
+    \item Collect all samples within that pixel's area
+    \item Average the RGBA values across all samples
+    \item Convert from float to uint8 format
+    \item Write to pixel buffer for display
+\end{enumerate}

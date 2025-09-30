@@ -1,0 +1,179 @@
+﻿\subsection{Task Breakdown}
+
+The assignment is divided into 6 specific tasks that must be completed sequentially. Each task focuses on a particular aspect of the rasterization pipeline.
+
+\subsubsection{Task 0: Line Rasterization}
+Implement basic line drawing using Bresenham's algorithm.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{software\_renderer.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+\begin{itemize}
+    \item \texttt{rasterize\_line(start: Vector2D, end: Vector2D, color: Color, width: float)} 
+    \begin{itemize}
+        \item Transform start and end points to screen space
+        \item Convert to sample coordinates
+        \item Implement Bresenham's algorithm with integer arithmetic
+        \item Handle line thickness by drawing multiple pixels
+        \item Use \texttt{fill\_sample()} to write pixels
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Task 1: Triangle Rasterization}
+Implement triangle filling using edge functions and barycentric coordinates.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{software\_renderer.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+\begin{itemize}
+    \item \texttt{rasterize\_triangle(vertices: List[Vector2D], color: Color)}
+    \begin{itemize}
+        \item Transform triangle vertices to screen/sample space
+        \item Compute bounding box optimization
+        \item Calculate triangle area for orientation detection
+        \item Use edge functions to test point-in-triangle
+        \item Handle both clockwise and counter-clockwise winding
+        \item Fill pixels using \texttt{fill\_sample()}
+    \end{itemize}
+\end{itemize}
+
+
+\subsubsection{Task 2: Supersampling \& Anti-aliasing}
+Implement the anti-aliasing pipeline using supersampling and box filter reconstruction.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{software\_renderer.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+\begin{itemize}
+    \item \texttt{fill\_sample(x: int, y: int, color: Color)}
+    \begin{itemize}
+        \item Bounds checking for sample buffer coordinates
+        \item Alpha blending with existing sample color
+        \item Write to high-resolution sample buffer
+    \end{itemize}
+    \item \texttt{fill\_pixel(x: int, y: int, color: Color)}
+    \begin{itemize}
+        \item Fill all NxN samples belonging to a pixel
+        \item Calculate correct sample coordinates
+        \item Call \texttt{fill\_sample()} for each sample
+    \end{itemize}
+    \item \texttt{resolve()}
+    \begin{itemize}
+        \item Box filter averaging from sample buffer to pixel buffer
+        \item Handle RGBA channels correctly
+        \item Convert from float to uint8 format
+        \item Write final colors to pixel buffer
+    \end{itemize}
+\end{itemize}
+
+
+\subsubsection{Task 3: Transform Hierarchy}
+Implement hierarchical transformations and viewport management.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{software\_renderer.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+\begin{itemize}
+    \item \texttt{draw\_element(element: SVGElement)} \textbf{}
+    \begin{itemize}
+        \item Push current transform onto stack
+        \item Apply element's local transformation
+        \item Render element based on type (point, line, triangle, polygon, rect, image, group)
+        \item Handle recursive rendering for groups
+        \item Pop transform to restore previous state
+    \end{itemizes}
+    \item \texttt{get\_matrix() -> Matrix3x3} \textbf{}
+    \begin{itemize}
+        \item Create transformation matrix from viewport to normalized space
+        \item Handle scale and translation calculations
+        \item Map viewport region to [-1,1] × [-1,1]
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Task 4: Image Rasterization)}
+Implement complete texture sampling pipeline with multiple filtering modes.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{software\_renderer.py}
+    \item \texttt{texture.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+
+\textbf{In \texttt{software\_renderer.py}}:
+\begin{itemize}
+    \item \texttt{rasterize\_image(img: SVGImage)} \textbf{(}
+    \begin{itemize}
+        \item Define image corners in local space
+        \item Transform corners to screen space
+        \item Compute bounding box
+        \item Create inverse transform for UV calculation
+        \item Map screen pixels back to texture coordinates
+        \item Sample texture using trilinear filtering
+    \end{itemize}
+\end{itemize}
+
+\textbf{In \texttt{texture.py}}:
+\begin{itemize}
+    \item \texttt{sample\_nearest(u: float, v: float, level: int) -> Color} \textbf{}
+    \begin{itemize}
+        \item Clamp UV coordinates to [0,1] range
+        \item Convert UV to pixel coordinates
+        \item Round to nearest integer pixel
+        \item Handle texture bounds clamping
+    \end{itemize}
+    \item \texttt{sample\_bilinear(u: float, v: float, level: int) -> Color} \textbf{}
+    \begin{itemize}
+        \item Convert UV to pixel coordinates with 0.5 offset
+        \item Get integer and fractional parts
+        \item Sample four surrounding pixels
+        \item Perform bilinear interpolation (horizontal then vertical)
+    \end{itemize}
+    \item \texttt{sample\_trilinear(u: float, v: float, mip\_level: float) -> Color} \textbf{}
+    \begin{itemize}
+        \item Determine appropriate mipmap level
+        \item Sample from two adjacent mipmap levels using bilinear
+        \item Linearly interpolate between results
+        \item Handle edge cases (single mip level, fractional near 0)
+    \end{itemize}
+    \item \texttt{generate\_mips()} \textbf{}
+    \begin{itemize}
+        \item Start with original texture as level 0
+        \item For each level, average 2×2 blocks from previous level
+        \item Continue until reaching 1×1 resolution
+        \item Store all levels in mipmaps array
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Task 5: Alpha Compositing}
+Implement standard alpha blending for transparency effects.
+
+\textbf{Files to modify}:
+\begin{itemize}
+    \item \texttt{math\_utils.py}
+\end{itemize}
+
+\textbf{Functions to implement}:
+\begin{itemize}
+    \item \texttt{alpha\_blend(self, background: Color) -> Color}
+    \begin{itemize}
+        \item Extract alpha from foreground color
+        \item Calculate inverse alpha (1 - alpha)
+        \item Blend RGB channels: \texttt{result = alpha * fg + (1-alpha) * bg}
+        \item Blend alpha channel: \texttt{result\_alpha = alpha + (1-alpha) * bg\_alpha}
+        \item Return new Color object with blended values
+    \end{itemize}
+\end{itemize}

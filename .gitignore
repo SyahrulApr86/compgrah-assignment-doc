@@ -1,0 +1,20 @@
+# LaTeX intermediate & output files
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.gz
+
+# Optional: jika pakai latexmk
+*.synctex.gz
+*.pdfsync
+*.xdv
+
+# Editor spesifik (misalnya TeXstudio, VSCode, dll.)
+*.bak
+*.tmp
+*.swp
