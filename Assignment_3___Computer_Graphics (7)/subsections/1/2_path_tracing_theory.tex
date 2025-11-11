@@ -1,0 +1,83 @@
+\subsection{Path Tracing Theory}
+
+\subsubsection{From Ray Tracing to Path Tracing}
+
+The evolution from classical ray tracing to path tracing represents a fundamental shift in how we approach the problem of rendering photorealistic images. While Whitted-style ray tracing, introduced in 1980, was revolutionary for its time in generating images with reflections and refractions, it fundamentally operates on an ad-hoc model of light transport. In Whitted ray tracing, we explicitly trace rays for specific phenomena: one ray for reflection on shiny surfaces, one for refraction through transparent materials, and shadow rays to determine direct illumination. This approach, while intuitive and efficient for certain effects, fails to capture the full complexity of light transport in the real world.
+
+The limitations of classical ray tracing become apparent when we consider diffuse interreflection, commonly known as color bleeding. When light bounces off a red wall onto a white ceiling, the ceiling should appear slightly pink—this is indirect illumination at work. Whitted ray tracing cannot capture this effect because it only traces specular rays and direct illumination. Similarly, caustics (the bright patterns created when light focuses through refractive objects), soft shadows from area lights, and the subtle gradations of ambient occlusion all require a more comprehensive approach to light transport.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{images/pathtracing-vs-rt.png}
+    \label{fig:placeholder}
+\end{figure}
+
+Path tracing emerged as the solution to these limitations by taking a fundamentally different approach: instead of tracing specific types of rays for specific phenomena, it traces paths of light as they would physically travel through the scene. Each path represents one possible route that light could take from a light source to the camera, and by tracing many such paths and averaging their contributions, we converge on the correct solution to the rendering equation. This shift from deterministic, phenomenon-specific ray tracing to stochastic, physically-based path tracing enables the simulation of all light transport phenomena within a single, unified framework.
+
+The key insight that makes path tracing practical is the principle of reciprocity in light transport. Light traveling from point A to point B follows the same path as light traveling from B to A, just in reverse. This means we can trace paths backward from the camera into the scene, which is far more efficient than tracing paths forward from light sources, as the vast majority of light emitted by sources never reaches the camera. This backward path tracing approach ensures that every path we trace contributes to the final image, making the computation tractable despite the infinite dimensional integral we're trying to solve.
+
+The distinction between local and global illumination further illustrates the power of path tracing. Local illumination models, including those used in Whitted ray tracing and rasterization, only consider light that travels directly from light sources to surfaces. They might add ambient terms or environment mapping to approximate indirect lighting, but these are hacks that don't accurately model the physics. Path tracing, by contrast, naturally handles global illumination because each ray bounce can gather light from any source, whether direct or indirect. When a path bounces multiple times, it accumulates the contribution of light that has itself bounced multiple times, automatically capturing all orders of indirect illumination.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{images/bouncing.png}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsubsection{Recursive Ray Tracing Algorithm}
+
+The recursive formulation of path tracing elegantly mirrors the recursive nature of the rendering equation itself. At its core, the algorithm is surprisingly simple: determine the color seen along a ray by finding what it hits, determining how light scatters at that surface, and recursively tracing a new ray in the scattered direction. This directly implements the physics of light transport without special cases or ad-hoc approximations.
+
+\textbf{Basic Algorithm Structure:}
+
+\begin{verbatim}
+function trace_ray(ray, depth):
+    if depth > max_depth:
+        return black
+
+    hit = find_closest_intersection(ray, scene)
+    if no hit:
+        return environment_color(ray.direction)
+
+    if hit.material.is_emissive:
+        return hit.material.emission
+
+    scattered_ray = sample_bsdf(hit.material, ray, hit)
+    if scattered_ray is absorbed:
+        return black
+
+    incoming_light = trace_ray(scattered_ray, depth + 1)
+    return hit.material.albedo * incoming_light * cosine_term
+\end{verbatim}
+
+This deceptively simple algorithm encapsulates the entire light transport simulation. Each recursive call represents one bounce along a light path, with the multiplication of colors implementing the throughput calculation as recursion unwinds.
+
+The depth parameter prevents infinite recursion in closed environments. Without proper termination:
+\begin{itemize}
+\item Paths could bounce forever in closed scenes, causing stack overflow
+\item Even with absorption, expected path lengths might be extremely long
+\item Computation wastes on paths contributing negligibly to the final image
+\end{itemize}
+
+Maximum depth is typically set between 5 and 50 depending on scene complexity. However, hard cutoffs introduce bias by systematically ignoring longer paths, causing darkening in scenes with multiple indirect bounces.
+
+Russian roulette provides an unbiased alternative to fixed depth cutoffs:
+\begin{itemize}
+\item Randomly terminate paths with probability based on their throughput
+\item Continue paths with probability $p = \min(1, \text{throughput})$
+\item Scale surviving paths by $1/p$ to maintain correct expected value
+\item Efficiently terminates low-contribution paths while preserving unbiased results
+\end{itemize}
+
+This ensures the estimator remains mathematically correct while avoiding wasted computation on negligible paths.
+
+Color accumulation along paths requires careful throughput tracking:
+\begin{itemize}
+\item Throughput = product of all BRDFs and cosine terms along the path
+\item Each surface interaction attenuates light based on material properties
+\item A diffuse surface might reflect 80\% of incident light
+\item Geometric terms further reduce by cosine of incident angle
+\item All factors multiply together maintaining energy conservation
+\end{itemize}
+
+Incorrect throughput calculation leads to implausibly bright images (energy amplification) or unrealistically dark renders (excessive attenuation).

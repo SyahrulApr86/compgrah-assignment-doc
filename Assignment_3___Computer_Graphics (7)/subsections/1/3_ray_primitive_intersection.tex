@@ -1,0 +1,164 @@
+\subsection{Ray-Primitive Intersection}
+
+Ray-primitive intersection forms the computational core of any ray tracer, consuming the majority of rendering time as millions or billions of rays must be tested against geometric primitives in the scene. The efficiency and correctness of these intersection routines directly determine both the performance and visual quality of the final render. While conceptually straightforward—we're simply finding where a line intersects with geometric shapes—the implementation requires careful attention to numerical precision, edge cases, and computational efficiency. These intersection algorithms must be robust enough to handle degenerate cases, fast enough to execute billions of times per image, and precise enough to avoid visual artifacts from numerical errors.
+
+\subsubsection{Ray-Sphere Intersection}
+
+The ray-sphere intersection algorithm serves as the perfect introduction to ray-primitive intersection, combining mathematical elegance with practical importance. Spheres appear frequently in ray tracing contexts, from test scenes that validate renderer correctness to production scenes where they approximate particles, droplets, or distant objects. The intersection algorithm derives from the fundamental definition of a sphere—all points equidistant from a center—combined with the parametric ray equation, yielding a quadratic equation whose solutions correspond to intersection points.
+
+The mathematical derivation begins with the sphere equation and ray equation. A sphere with center $\mathbf{C}$ and radius $r$ satisfies the equation $|\mathbf{P} - \mathbf{C}|^2 = r^2$ for any point $\mathbf{P}$ on its surface. The ray equation gives us $\mathbf{P}(t) = \mathbf{O} + t\mathbf{d}$, where $\mathbf{O}$ is the ray origin and $\mathbf{d}$ is the direction. Substituting the ray equation into the sphere equation, we obtain:
+
+\begin{equation}
+|\mathbf{O} + t\mathbf{d} - \mathbf{C}|^2 = r^2
+\end{equation}
+
+Expanding this equation yields a standard quadratic in $t$:
+\begin{equation}
+(\mathbf{d} \cdot \mathbf{d})t^2 + 2(\mathbf{d} \cdot \mathbf{oc})t + (\mathbf{oc} \cdot \mathbf{oc} - r^2) = 0
+\end{equation}
+
+where $\mathbf{oc} = \mathbf{O} - \mathbf{C}$ is the vector from the sphere center to the ray origin.
+
+This quadratic formulation reveals the three possible intersection scenarios through the discriminant. When the discriminant is negative, the ray misses the sphere entirely—there are no real solutions for $t$. A zero discriminant indicates that the ray grazes the sphere tangentially, touching at exactly one point. A positive discriminant means the ray passes through the sphere, entering at one point and exiting at another, corresponding to two distinct $t$ values.
+
+The standard quadratic formula provides the solutions:
+\begin{equation}
+t = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+\end{equation}
+
+However, a crucial optimization recognizes that if the ray direction is normalized (which is common but not required), then $a = \mathbf{d} \cdot \mathbf{d} = 1$. Furthermore, we can use the half-b formulation where $\text{half}_b = \mathbf{d} \cdot \mathbf{oc}$, simplifying our equation and reducing computational cost. This optimization matters when performing billions of intersection tests.
+
+The interpretation of the $t$ values requires careful consideration. The two solutions represent the entry and exit points of the ray through the sphere. For primary rays from the camera, we typically want the closest intersection, corresponding to the smaller positive $t$ value. However, negative $t$ values represent intersections behind the ray origin, which should be ignored for camera rays but might be relevant for other ray types. The case where one $t$ is negative and one is positive indicates that the ray origin is inside the sphere—a situation that requires special handling depending on the application.
+
+Normal vector calculation at the intersection point is straightforward for spheres. The normal at any point on a sphere points directly away from the center, making it simply the normalized vector from center to intersection point:
+\begin{equation}
+\mathbf{n} = \frac{\mathbf{P}(t) - \mathbf{C}}{r}
+\end{equation}
+
+The division by radius simultaneously normalizes the vector and saves a square root operation compared to explicit normalization.
+
+Numerical precision issues plague ray-sphere intersection despite its mathematical simplicity. When the ray origin is very close to the sphere surface (common for secondary rays), floating-point errors in the discriminant calculation can cause self-intersection artifacts. The standard solution involves offsetting the minimum valid $t$ value slightly above zero (typically $t_{\min} = 0.001$), preventing rays from immediately re-intersecting the surface they just left. This epsilon value must be chosen carefully—too small and self-intersections persist, too large and we create visible gaps between objects.
+
+\subsubsection{Ray-Triangle Intersection}
+
+Triangle intersection represents the most critical primitive intersection in ray tracing, as triangulated meshes form the basis of most complex geometry in computer graphics. Every detailed model, from characters to environments, ultimately decomposes into triangles for rendering. The efficiency of ray-triangle intersection therefore directly impacts the performance of production ray tracers. The Möller-Trumbore algorithm has emerged as the standard solution, providing an elegant and efficient method that simultaneously computes the intersection point and barycentric coordinates without requiring pre-computed plane equations or coordinate system transformations.
+
+The Möller-Trumbore algorithm leverages the parametric representation of a point within a triangle using barycentric coordinates. Any point $\mathbf{P}$ inside a triangle with vertices $\mathbf{V_0}$, $\mathbf{V_1}$, and $\mathbf{V_2}$ can be expressed as:
+\begin{equation}
+\mathbf{P} = (1 - u - v)\mathbf{V_0} + u\mathbf{V_1} + v\mathbf{V_2}
+\end{equation}
+
+where $u$ and $v$ are the barycentric coordinates, satisfying $u \geq 0$, $v \geq 0$, and $u + v \leq 1$ for points inside the triangle. This can be rewritten as:
+\begin{equation}
+\mathbf{P} = \mathbf{V_0} + u(\mathbf{V_1} - \mathbf{V_0}) + v(\mathbf{V_2} - \mathbf{V_0})
+\end{equation}
+
+Setting this equal to the ray equation $\mathbf{O} + t\mathbf{d}$ and rearranging gives us a system of linear equations:
+\begin{equation}
+\mathbf{O} - \mathbf{V_0} = -t\mathbf{d} + u\mathbf{E_1} + v\mathbf{E_2}
+\end{equation}
+
+where $\mathbf{E_1} = \mathbf{V_1} - \mathbf{V_0}$ and $\mathbf{E_2} = \mathbf{V_2} - \mathbf{V_0}$ are the edge vectors.
+
+The brilliance of the Möller-Trumbore algorithm lies in solving this system using Cramer's rule, which expresses the solution in terms of determinants that can be computed efficiently using cross and dot products. The solution involves computing:
+
+\begin{align}
+\mathbf{h} &= \mathbf{d} \times \mathbf{E_2} \\
+a &= \mathbf{E_1} \cdot \mathbf{h} \\
+\mathbf{s} &= \mathbf{O} - \mathbf{V_0} \\
+u &= \frac{1}{a}(\mathbf{s} \cdot \mathbf{h})
+\end{align}
+
+If $|a|$ is very small (close to zero), the ray is nearly parallel to the triangle plane, and we can immediately reject the intersection. This early rejection test is one of the algorithm's strengths, avoiding unnecessary computation for rays that cannot intersect the triangle.
+
+The algorithm continues with similar calculations for $v$ and $t$:
+\begin{align}
+\mathbf{q} &= \mathbf{s} \times \mathbf{E_1} \\
+v &= \frac{1}{a}(\mathbf{d} \cdot \mathbf{q}) \\
+t &= \frac{1}{a}(\mathbf{E_2} \cdot \mathbf{q})
+\end{align}
+
+The beauty of this formulation is that we can test the barycentric coordinates as we compute them, enabling early rejection without completing all calculations. If $u < 0$ or $u > 1$, we can immediately return no intersection. Similarly, if $v < 0$ or $u + v > 1$, the point lies outside the triangle. Only if all barycentric conditions are satisfied do we need to check if $t$ falls within the valid range $[t_{\min}, t_{\max}]$.
+
+Normal calculation for triangles requires careful consideration of winding order and double-sided surfaces. The geometric normal can be computed from the cross product of edge vectors:
+\begin{equation}
+\mathbf{n} = \frac{\mathbf{E_1} \times \mathbf{E_2}}{|\mathbf{E_1} \times \mathbf{E_2}|}
+\end{equation}
+
+However, this normal points in a direction determined by the vertex winding order. For single-sided triangles (common in closed meshes), we might cull back-facing triangles by checking if $\mathbf{d} \cdot \mathbf{n} > 0$. For double-sided triangles (used in thin surfaces like leaves or cloth), we need to flip the normal for back-face hits to ensure it always points toward the ray origin.
+
+The algorithm's efficiency stems from its minimal arithmetic operations and early rejection opportunities. Compared to the classical approach of computing the plane equation, transforming to 2D, and testing point-in-triangle, Möller-Trumbore requires fewer operations and no coordinate system changes. The algorithm performs one cross product, five dot products, one reciprocal, three multiplies, and three adds in the worst case, with opportunities for early termination reducing the average cost further.
+
+\subsubsection{Ray-AABB Intersection}
+
+Axis-Aligned Bounding Box (AABB) intersection serves as the gateway operation for hierarchical acceleration structures, determining which parts of the BVH tree need detailed intersection testing. Unlike sphere or triangle intersections that directly contribute to the rendered image, AABB intersections act as conservative filters, quickly rejecting large portions of the scene that cannot possibly intersect with a ray. The efficiency of AABB intersection is therefore paramount—it must be as fast as possible while maintaining conservative correctness, never producing false negatives that would cause us to miss actual geometry intersections.
+
+The conceptual foundation of AABB intersection rests on the slab method, which views an AABB as the intersection of three pairs of parallel planes aligned with the coordinate axes. Each pair of planes forms an infinite slab, and the AABB is the region where all three slabs overlap. A ray intersects the AABB if and only if there exists a segment of the ray that lies within all three slabs simultaneously. This geometric insight transforms the 3D intersection problem into three independent 1D problems, which can be solved efficiently and combined to determine the overall intersection.
+
+For each coordinate axis, we compute where the ray enters and exits the corresponding slab. Given an AABB with minimum corner $\mathbf{min} = (x_{\min}, y_{\min}, z_{\min})$ and maximum corner $\mathbf{max} = (x_{\max}, y_{\max}, z_{\max})$, and a ray with origin $\mathbf{O} = (O_x, O_y, O_z)$ and direction $\mathbf{d} = (d_x, d_y, d_z)$, the $t$ values for entering and exiting the x-slab are:
+
+\begin{align}
+t_{x,\min} &= \frac{x_{\min} - O_x}{d_x} \\
+t_{x,\max} &= \frac{x_{\max} - O_x}{d_x}
+\end{align}
+
+Similar calculations apply for the y and z slabs. However, we must be careful about the sign of the direction components. If $d_x$ is negative, the ray travels in the negative x direction, so it enters the slab at $x_{\max}$ and exits at $x_{\min}$, swapping our $t$ values. Rather than using conditional logic, we can handle this elegantly by always computing both $t$ values and then using minimum and maximum operations to determine entry and exit.
+
+The overall intersection logic combines the per-axis results. The ray enters the AABB at the latest entry point across all axes and exits at the earliest exit point:
+\begin{align}
+t_{\text{enter}} &= \max(t_{x,\min}, t_{y,\min}, t_{z,\min}) \\
+t_{\text{exit}} &= \min(t_{x,\max}, t_{y,\max}, t_{z,\max})
+\end{align}
+
+An intersection occurs if and only if $t_{\text{enter}} \leq t_{\text{exit}}$ and the intersection interval $[t_{\text{enter}}, t_{\text{exit}}]$ overlaps with the ray's valid range $[t_{\min}, t_{\max}]$.
+
+Special cases require careful handling to maintain robustness. When a ray direction component is zero or very small, the division can produce infinity or large numerical errors. For exactly zero components, we can use a separate test: if the ray origin lies outside the slab in that dimension, there's no intersection; otherwise, the ray is parallel to and inside the slab, contributing $[-\infty, +\infty]$ to the intersection interval. For near-zero components, we might use a small epsilon to avoid division by very small numbers, though modern implementations often rely on IEEE floating-point infinity handling to manage these cases naturally.
+
+
+\subsubsection{Hit Record Structure}
+
+The hit record serves as the communication protocol between intersection routines and shading code, encapsulating all information needed to shade an intersection point. This abstraction allows the shading system to remain agnostic about primitive types while providing all necessary data for rendering calculations.
+
+The practical C structure contains:
+\begin{verbatim}
+typedef struct {
+    float t;                 // Ray parameter at intersection
+    vec3 point;             // 3D intersection point
+    vec3 normal;            // Surface normal (toward ray)
+    vec3 geometric_normal;  // True geometric normal
+    vec2 uv;                // Texture coordinates
+    Material* material;     // Material pointer
+    bool front_face;        // Hit front or back face
+    int primitive_id;       // For debugging/AOVs
+} HitRecord;
+\end{verbatim}
+
+Each field serves a specific purpose:
+\begin{itemize}
+\item \texttt{t}: Determines visibility and computes the 3D intersection point
+\item \texttt{point}: Cached intersection position for repeated use during shading
+\item \texttt{normal}: Surface normal oriented toward ray origin for shading calculations
+\item \texttt{geometric\_normal}: Unmodified normal for special effects and transparency handling
+\item \texttt{uv}: Texture coordinates for mapping 2D textures to 3D surfaces
+\item \texttt{material}: Pointer to material properties (keeps hit record compact)
+\item \texttt{front\_face}: Indicates which side of the surface was hit
+\item \texttt{primitive\_id}: Useful for debugging and render passes
+\end{itemize}
+
+\textbf{Usage Lifecycle:}
+
+The hit record flows through two main phases:
+\begin{itemize}
+\item \textit{Intersection phase}: Geometric data ($t$, point, normal, UV) is computed and stored
+\item \textit{Shading phase}: Data is read repeatedly for material evaluation and light calculations
+\end{itemize}
+
+Since millions of hit records are created per frame:
+\begin{itemize}
+\item Stack allocation preferred over heap for performance
+\item Small structure size improves cache utilization
+\item Field ordering affects cache line alignment
+\item Material stored as pointer to minimize record size
+\end{itemize}
+
+This abstraction provides clean separation between geometry and shading, enabling intersection routines to be reused across different rendering algorithms while maintaining efficient memory usage and performance.

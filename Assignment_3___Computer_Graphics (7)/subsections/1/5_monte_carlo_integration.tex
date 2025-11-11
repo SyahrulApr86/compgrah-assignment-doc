@@ -1,0 +1,263 @@
+\subsection{Monte Carlo Integration}
+
+Monte Carlo integration transforms intractable mathematical problems into statistical estimation tasks, leveraging randomness to solve integrals that would be impossible or impractical to evaluate analytically. Named after the famous casino in Monaco, this method embraces uncertainty and probability to achieve deterministic results, a seemingly paradoxical approach that has revolutionized fields from physics to finance. In computer graphics, Monte Carlo methods enable us to solve the rendering equation—a recursive integral equation with no closed-form solution—by converting the continuous integration problem into a discrete sampling problem that computers can handle efficiently.
+
+\subsubsection{The Monte Carlo Method}
+
+The Monte Carlo method rests on a profound insight: we can estimate the value of any integral by randomly sampling the integrand and computing the average of these samples. This approach transforms integration from a continuous mathematical operation into a discrete statistical process, making it particularly well-suited for computer implementation. The theoretical foundation lies in the law of large numbers, which guarantees that as we increase the number of samples, our estimate converges to the true value of the integral with probability one.
+
+Consider the problem of evaluating a general integral over some domain $\Omega$:
+\begin{equation}
+I = \int_{\Omega} f(x) \, dx
+\end{equation}
+
+The Monte Carlo estimator approximates this integral using $N$ random samples $x_i$ drawn from a probability density function $p(x)$:
+\begin{equation}
+\langle I \rangle = \frac{1}{N} \sum_{i=1}^{N} \frac{f(x_i)}{p(x_i)}
+\end{equation}
+
+This estimator is unbiased, meaning its expected value equals the true integral:
+\begin{equation}
+E[\langle I \rangle] = E\left[\frac{f(X)}{p(X)}\right] = \int_{\Omega} \frac{f(x)}{p(x)} p(x) \, dx = \int_{\Omega} f(x) \, dx = I
+\end{equation}
+
+The power of this formulation becomes apparent when we consider high-dimensional integrals. Traditional numerical integration methods like Simpson's rule or Gaussian quadrature suffer from the curse of dimensionality—their convergence rate deteriorates exponentially with the number of dimensions. Monte Carlo integration, remarkably, maintains a convergence rate of $O(1/\sqrt{N})$ regardless of dimensionality. This dimension-independent convergence makes Monte Carlo the only practical choice for the high-dimensional integrals encountered in light transport, where each bounce of light adds dimensions to the integration domain.
+
+The variance of the Monte Carlo estimator determines the quality of our approximation and the rate of convergence:
+\begin{equation}
+\text{Var}[\langle I \rangle] = \frac{1}{N} \text{Var}\left[\frac{f(X)}{p(X)}\right] = \frac{1}{N} \left(\int_{\Omega} \left(\frac{f(x)}{p(x)}\right)^2 p(x) \, dx - I^2\right)
+\end{equation}
+
+This variance decreases linearly with the number of samples, leading to the characteristic $1/\sqrt{N}$ convergence rate for the standard deviation (error). In practical terms, this means that to reduce the error by half, we need four times as many samples—a slow convergence that motivates the development of variance reduction techniques.
+
+The choice of probability density function $p(x)$ profoundly affects the estimator's variance. The ideal choice would be $p(x) \propto |f(x)|$, which would yield zero variance if we knew the normalization constant. Of course, if we knew this normalization, we would already know the integral's value. This observation leads to the fundamental principle of importance sampling: we should sample more densely where the integrand is large and less densely where it's small, approximating the ideal density as closely as possible with the information available.
+
+In the context of rendering, Monte Carlo integration allows us to estimate pixel colors by randomly sampling light paths. Each path represents one sample of the rendering equation's integrand, and the average of many such paths converges to the true pixel color. The randomness manifests as noise in the rendered image—a grainy appearance that gradually smooths out as more samples are added. This noise is the visual representation of variance in our Monte Carlo estimator, and understanding its sources helps us develop better sampling strategies.
+
+\subsubsection{Estimating the Rendering Equation}
+
+The rendering equation presents a formidable computational challenge: it's a recursive Fredholm integral equation of the second kind with no general analytical solution. Monte Carlo integration provides the key to unlocking this equation, transforming it from an abstract mathematical formulation into a practical algorithm that produces stunning photorealistic images. The application of Monte Carlo to the rendering equation reveals deep connections between probability theory, physics, and visual perception.
+
+Recall the rendering equation in its integral form:
+\begin{equation}
+L_o(\mathbf{x}, \omega_o) = L_e(\mathbf{x}, \omega_o) + \int_{\Omega} f_r(\mathbf{x}, \omega_i, \omega_o) L_i(\mathbf{x}, \omega_i) \cos\theta_i \, d\omega_i
+\end{equation}
+
+To apply Monte Carlo integration, we need to identify the integrand and choose an appropriate sampling strategy. The integrand is the product of three terms: the BRDF $f_r$, the incoming radiance $L_i$, and the cosine term $\cos\theta_i$. The challenge is that $L_i$ itself is unknown—it's the outgoing radiance from another point in the scene, which depends on yet another rendering equation evaluation.
+
+The Monte Carlo estimator for the rendering equation becomes:
+\begin{equation}
+L_o(\mathbf{x}, \omega_o) \approx L_e(\mathbf{x}, \omega_o) + \frac{1}{N} \sum_{i=1}^{N} \frac{f_r(\mathbf{x}, \omega_i, \omega_o) L_i(\mathbf{x}, \omega_i) \cos\theta_i}{p(\omega_i)}
+\end{equation}
+
+where $\omega_i$ are random directions sampled according to the probability density $p(\omega)$.
+
+The recursive nature of the rendering equation leads to the path integral formulation of light transport. When we recursively evaluate $L_i$ using Monte Carlo, we build up a path from the camera into the scene. Each recursive evaluation adds a vertex to the path, and the final path contribution is the product of all BRDFs and cosine terms along the path, multiplied by the emission from the light source at the path's end:
+
+\begin{equation}
+L = L_e \prod_{k=1}^{n} \frac{f_r(\mathbf{x}_k, \omega_{k-1}, \omega_k) \cos\theta_k}{p(\omega_k)}
+\end{equation}
+
+This path integral formulation reveals why path tracing can be interpreted as a random walk through the scene. At each surface interaction, we randomly choose a new direction based on the material properties, continuing until we hit a light source or terminate the path. The contribution of each path is weighted by the probability of generating that specific path, ensuring an unbiased estimate of the true radiance.
+
+The choice of sampling density $p(\omega)$ at each bounce significantly impacts the estimator's efficiency. The optimal strategy depends on which factors in the integrand we can importance sample:
+
+\begin{itemize}
+\item \textbf{BRDF Importance Sampling}: Sample directions according to the BRDF's shape, concentrating samples where the BRDF is large. This is particularly effective for specular materials where the BRDF is highly peaked.
+
+\item \textbf{Cosine Importance Sampling}: Sample directions according to the cosine term, generating more samples near the normal. This works well for diffuse materials where the BRDF is relatively constant.
+
+\item \textbf{Product Importance Sampling}: Ideally, we would sample according to the product $f_r \cdot \cos\theta$, but this is often difficult to sample directly.
+
+\item \textbf{Light Importance Sampling}: In advanced implementations, we might sample directions toward bright light sources, though this requires knowledge of the scene's light distribution.
+\end{itemize}
+
+The practical implementation typically uses BRDF importance sampling combined with cosine weighting for diffuse surfaces. For a Lambertian BRDF with cosine-weighted sampling, the Monte Carlo estimator simplifies beautifully:
+
+\begin{equation}
+L_o \approx L_e + \frac{1}{N} \sum_{i=1}^{N} \frac{(\rho/\pi) L_i \cos\theta_i}{(\cos\theta_i/\pi)} = L_e + \frac{\rho}{N} \sum_{i=1}^{N} L_i
+\end{equation}
+
+The cosine terms cancel, leaving a simple average of the incoming radiance values multiplied by the albedo. This cancellation is why cosine-weighted sampling is so effective for diffuse materials—it eliminates one source of variance in the estimator.
+
+\subsubsection{Russian Roulette}
+
+Russian roulette provides an elegant solution to the path termination problem in Monte Carlo ray tracing, ensuring unbiased results while preventing infinite recursion. Named after the infamous game of chance, this technique randomly terminates paths based on their expected contribution, maintaining mathematical correctness while dramatically improving efficiency. Without Russian roulette, we face an uncomfortable dilemma: either truncate paths at a fixed depth (introducing bias) or trace paths indefinitely (impossible in practice). Russian roulette offers a third way—probabilistic termination that preserves the expected value while bounding computation.
+
+The fundamental principle of Russian roulette is surprisingly simple: we randomly decide whether to continue tracing a path, and if we do continue, we increase the path's weight to compensate for the terminated paths. Specifically, if we continue a path with probability $p$, we must multiply its contribution by $1/p$ to maintain the correct expected value:
+
+\begin{equation}
+E[L_{RR}] = p \cdot \frac{L}{p} + (1-p) \cdot 0 = L
+\end{equation}
+
+This shows that Russian roulette produces an unbiased estimate—the expected value equals the true value $L$ regardless of the continuation probability $p$.
+
+The continuation probability can be chosen in various ways, each with different trade-offs between bias, variance, and efficiency:
+
+\textbf{Fixed Probability Russian Roulette}: The simplest approach uses a constant continuation probability after a certain depth:
+\begin{verbatim}
+if (depth > MIN_DEPTH) {
+    float p_continue = 0.9;
+    if (rng_float(rng) > p_continue) {
+        return vec3_create(0, 0, 0);  // Terminate
+    }
+    throughput /= p_continue;  // Increase weight
+}
+\end{verbatim}
+
+While straightforward, this approach doesn't adapt to the path's actual contribution, potentially terminating important paths while continuing negligible ones.
+
+\textbf{Throughput-Based Russian Roulette}: A more sophisticated approach bases the continuation probability on the path's throughput—the accumulated product of BRDFs and cosine terms:
+\begin{equation}
+p = \min(1, \max(\text{throughput.r}, \text{throughput.g}, \text{throughput.b}))
+\end{equation}
+
+This adaptive strategy naturally terminates paths that have been heavily attenuated while allowing important paths to continue. Paths carrying significant energy are never terminated ($p = 1$ when throughput is high), while dim paths are terminated with probability proportional to their contribution.
+
+The relationship between Russian roulette and variance requires careful consideration. While Russian roulette maintains the correct expected value, it does increase variance—some paths are terminated early (contributing zero), while others are boosted (contributing more than their natural value). The variance increase is:
+
+\begin{equation}
+\text{Var}[L_{RR}] = \frac{1 - p}{p} L^2 + \text{Var}[L]
+\end{equation}
+
+This additional variance term $(1-p)/p \cdot L^2$ shows why we should avoid terminating high-contribution paths—doing so would add substantial variance to our estimate.
+
+Russian roulette becomes particularly important in scenes with high albedo materials or many reflective surfaces, where paths can bounce many times before naturally terminating. Consider a white room (albedo near 1.0) illuminated by a small light. Without Russian roulette, paths could bounce dozens or hundreds of times, each bounce contributing a small amount to the final image. Russian roulette allows us to statistically sample these long paths without explicitly tracing every bounce, dramatically reducing computation while maintaining correctness.
+
+The implementation of Russian roulette must carefully handle edge cases and numerical precision:
+
+\begin{verbatim}
+vec3 trace_ray(Ray ray, Scene* scene, RNG* rng, int depth, vec3 throughput) {
+    // Always trace a minimum number of bounces without RR
+    const int RR_START_DEPTH = 3;
+
+    if (depth >= MAX_DEPTH) {
+        return vec3_create(0, 0, 0);  // Hard limit
+    }
+
+    HitRecord hit;
+    if (!scene_intersect(scene, &ray, &hit)) {
+        return scene->background;
+    }
+
+    // Handle emission
+    vec3 emission = material_emission(&hit);
+
+    // Russian roulette after minimum depth
+    float p_continue = 1.0f;
+    if (depth >= RR_START_DEPTH) {
+        p_continue = fminf(1.0f, vec3_max_component(throughput));
+        if (rng_float(rng) > p_continue) {
+            return emission;  // Terminate, return only emission
+        }
+    }
+
+    // Sample new direction
+    vec3 brdf;
+    Ray scattered;
+    if (!material_scatter(&hit, &ray, &brdf, &scattered, rng)) {
+        return emission;  // No scatter, return emission only
+    }
+
+    // Recursive trace with adjusted throughput
+    vec3 new_throughput = vec3_div(vec3_mul(throughput, brdf), p_continue);
+    vec3 incoming = trace_ray(scattered, scene, rng, depth + 1, new_throughput);
+
+    return vec3_add(emission, vec3_mul(brdf, incoming) / p_continue);
+}
+\end{verbatim}
+
+\subsubsection{Variance Reduction Techniques}
+
+Variance reduction techniques form the arsenal of methods that transform Monte Carlo rendering from a theoretical curiosity into a practical tool for producing high-quality images. While the basic Monte Carlo method guarantees convergence, the slow $1/\sqrt{N}$ rate means that naive implementations require enormous numbers of samples to achieve acceptable quality. Variance reduction techniques attack this problem from multiple angles, each exploiting different aspects of the rendering problem to reduce noise without introducing bias. Understanding and implementing these techniques can improve rendering efficiency by orders of magnitude.
+
+\textbf{Stratified Sampling} divides the sampling domain into non-overlapping regions (strata) and ensures that each stratum receives a proportional number of samples. Instead of purely random sampling, which can leave gaps and create clusters, stratified sampling provides better coverage of the integration domain. For pixel sampling, we divide each pixel into a grid of subpixels and place one sample in each:
+
+\begin{verbatim}
+vec3 sample_pixel_stratified(int x, int y, int sx, int sy,
+                             int strata_x, int strata_y, RNG* rng) {
+    float u = (x + (sx + rng_float(rng)) / strata_x) / image_width;
+    float v = (y + (sy + rng_float(rng)) / strata_y) / image_height;
+    return camera_get_ray(u, v);
+}
+\end{verbatim}
+
+Stratified sampling reduces variance by eliminating the clustering that can occur with pure random sampling. The variance reduction factor is approximately $(\sigma^2_{strata} / \sigma^2_{random}) \approx 1/n$ for $n$ strata when the integrand is smooth, though the benefit diminishes for discontinuous functions.
+
+\textbf{Low-Discrepancy Sequences} (quasi-Monte Carlo) replace random numbers with carefully constructed deterministic sequences that provide better uniformity than random sampling. Sequences like Halton, Hammersley, and Sobol distribute points more evenly across the sampling domain:
+
+\begin{equation}
+\text{Halton}_b(i) = \sum_{j=0}^{\infty} d_j b^{-j-1}
+\end{equation}
+
+where $d_j$ are the digits of $i$ in base $b$. These sequences achieve variance reduction through better spatial distribution, often providing $O((\log N)^d/N)$ convergence instead of $O(1/\sqrt{N})$ for smooth integrands.
+
+\textbf{Multiple Importance Sampling (MIS)} combines multiple sampling strategies optimally when no single strategy works well everywhere. Consider direct lighting: we could sample the BRDF (good for specular surfaces) or sample the light source (good for small lights). MIS combines both strategies using carefully chosen weights that prevent high-variance samples from dominating:
+
+\begin{equation}
+L = \sum_{i=1}^{n_f} w_f(X_{f,i}) \frac{f(X_{f,i})}{p_f(X_{f,i})} + \sum_{j=1}^{n_g} w_g(X_{g,j}) \frac{f(X_{g,j})}{p_g(X_{g,j})}
+\end{equation}
+
+The balance heuristic provides near-optimal weights:
+\begin{equation}
+w_f(x) = \frac{n_f p_f(x)}{n_f p_f(x) + n_g p_g(x)}
+\end{equation}
+
+\textbf{Control Variates} reduce variance by subtracting a correlated function whose integral we know analytically. If we can find a function $g(x)$ similar to $f(x)$ with known integral $I_g$, we can estimate:
+\begin{equation}
+I_f = I_g + \frac{1}{N} \sum_{i=1}^{N} \frac{f(x_i) - g(x_i)}{p(x_i)}
+\end{equation}
+
+The variance of $(f - g)$ is typically much smaller than the variance of $f$ alone, leading to faster convergence.
+
+\textbf{Adaptive Sampling} allocates computational effort based on local image statistics, placing more samples in regions with high variance. A simple implementation tracks the variance of pixel estimates and continues sampling until the variance falls below a threshold:
+
+\begin{verbatim}
+typedef struct {
+    vec3 sum;
+    vec3 sum_squares;
+    int count;
+} PixelStats;
+
+float pixel_variance(PixelStats* stats) {
+    vec3 mean = vec3_div(stats->sum, stats->count);
+    vec3 mean_squares = vec3_div(stats->sum_squares, stats->count);
+    vec3 variance = vec3_sub(mean_squares, vec3_mul(mean, mean));
+    return vec3_max_component(variance);
+}
+
+void adaptive_sample_pixel(int x, int y, float threshold) {
+    PixelStats stats = {0};
+
+    while (stats.count < MIN_SAMPLES ||
+           (stats.count < MAX_SAMPLES &&
+            pixel_variance(&stats) > threshold)) {
+        vec3 sample = trace_pixel(x, y);
+        stats.sum = vec3_add(stats.sum, sample);
+        stats.sum_squares = vec3_add(stats.sum_squares,
+                                     vec3_mul(sample, sample));
+        stats.count++;
+    }
+
+    set_pixel(x, y, vec3_div(stats.sum, stats.count));
+}
+\end{verbatim}
+
+\textbf{Importance Resampling} generates better distributed samples by resampling from an initial set based on their importance. This technique is particularly useful when the optimal sampling distribution is unknown but can be estimated from samples:
+
+\begin{enumerate}
+\item Generate $M$ preliminary samples $x_1, ..., x_M$ uniformly
+\item Compute importance weights $w_i = f(x_i)/p(x_i)$
+\item Resample $N$ samples from the preliminary set with probability proportional to $w_i$
+\item Use the resampled set for the final estimate
+\end{enumerate}
+
+\textbf{Bidirectional Techniques} trace paths from both the camera and light sources, connecting them to form complete light paths. While more complex to implement than unidirectional path tracing, bidirectional methods excel at capturing certain lighting effects:
+
+\begin{itemize}
+\item Caustics (light focused through glass) are easily captured by light paths but difficult for eye paths
+\item Indirect illumination of diffuse surfaces is efficiently sampled by eye paths
+\item Direct illumination can be computed by both strategies and combined via MIS
+\end{itemize}
+
+The effectiveness of variance reduction techniques depends heavily on the specific rendering scenario. Glossy reflections benefit from good BRDF sampling, small light sources require explicit light sampling, and high-frequency textures need careful filtering. The art of efficient rendering lies in choosing and combining appropriate variance reduction techniques for the scene at hand, balancing implementation complexity against performance gains. Modern production renderers employ dozens of variance reduction techniques, carefully tuned and combined to achieve the performance necessary for feature film production.

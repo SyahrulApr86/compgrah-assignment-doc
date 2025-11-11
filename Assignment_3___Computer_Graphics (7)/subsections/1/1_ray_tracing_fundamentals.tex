@@ -1,0 +1,109 @@
+\subsection{Ray Tracing Fundamentals}
+
+\subsubsection{What is Ray Tracing?}
+
+Ray tracing is a rendering technique that simulates the physical behavior of light to generate images with unprecedented realism and accuracy. Unlike rasterization, which projects 3D geometry onto a 2D screen using a series of linear transformations and then applies shading models to approximate lighting, ray tracing works by tracing the path of light rays as they travel through a virtual scene. This fundamental difference allows ray tracing to naturally handle complex optical phenomena such as reflections, refractions, shadows, and indirect illumination that are challenging or impossible to achieve accurately with rasterization.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/raytrace.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The conceptual foundation of ray tracing is elegantly simple: we simulate light transport by following rays of light backwards from the camera into the scene. For each pixel in the output image, we cast a ray from the camera through that pixel and into the 3D world. When this ray intersects with an object, we calculate how light interacts with that surface, potentially spawning new rays for reflections, refractions, or shadow testing. This process continues recursively until we've gathered enough information to determine the final color of the pixel.
+
+The distinction between ray tracing and rasterization becomes particularly apparent when considering visibility and shading. In rasterization, visibility is determined through the z-buffer algorithm, where fragments compete for each pixel based on their depth values. This approach is inherently local—each primitive is processed independently without knowledge of the rest of the scene. Consequently, effects like shadows require additional rendering passes with shadow maps, reflections need environment mapping or screen-space techniques, and global illumination requires complex approximations. Ray tracing, by contrast, has global knowledge of the scene at every intersection point. When a ray hits a surface, we can cast additional rays to any other part of the scene to gather information about shadows, reflections, or indirect lighting. This global approach makes ray tracing conceptually simpler for complex lighting effects, though computationally more expensive.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{images/raster-vs-rt.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The camera model in ray tracing typically uses a pinhole camera abstraction, where all rays originate from a single point (the camera position) and pass through a virtual image plane positioned between the camera and the scene. Each pixel on this image plane corresponds to a specific direction in which we cast a ray. The field of view determines the relationship between pixel positions and ray directions, with wider fields of view spreading rays over larger angles. This model naturally handles perspective projection without requiring the matrix transformations used in rasterization pipelines.
+
+Ray tracing distinguishes between several types of rays, each serving a specific purpose in the light transport simulation:
+
+\begin{itemize}
+    \item \textbf{Primary rays} (or camera rays) are the initial rays cast from the camera through each pixel. These rays determine the first visible surface for each pixel and form the foundation of the rendering process.
+
+    \item \textbf{Secondary rays} are spawned from surface intersection points to compute additional light transport contributions. In classical Whitted-style ray tracing, these typically include \textit{reflection rays} (following the mirror reflection direction) and \textit{refraction rays} (passing through transparent or refractive materials). In path tracing, secondary rays also include \textit{diffuse rays} that are sampled over the hemisphere above the surface to account for global illumination and indirect light bounces.
+
+
+    \item \textbf{Shadow rays} (or occlusion rays) are cast from a surface point toward light sources to determine visibility. If a shadow ray reaches the light without hitting any other geometry, the surface point receives direct illumination from that light; otherwise, it remains in shadow.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{images/type-of-ray.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The power of ray tracing lies in its ability to accurately model light transport, but this accuracy comes at a computational cost. Each ray-scene intersection requires testing against potentially thousands or millions of geometric primitives, making naive implementations impractically slow. This is why acceleration structures like Bounding Volume Hierarchies (BVH) are essential for practical ray tracing, reducing the average-case complexity from O(n) to O(log n) for n primitives.
+
+\subsubsection{Ray Equation and Representation}
+
+The mathematical representation of a ray forms the foundation of all ray tracing algorithms. A ray is fundamentally a half-line that starts at a specific point and extends infinitely in a particular direction. We represent this mathematically using the parametric equation:
+
+\begin{equation}
+\mathbf{P}(t) = \mathbf{O} + t\mathbf{d}
+\end{equation}
+
+where $\mathbf{O}$ is the ray origin (a 3D point), $\mathbf{d}$ is the ray direction (a 3D vector, typically normalized), and $t$ is a scalar parameter that controls how far along the ray we are. When $t = 0$, we're at the ray origin; as $t$ increases, we move further along the ray in the direction $\mathbf{d}$.
+
+This parametric representation is particularly powerful because it allows us to express any point along the ray using a single scalar value $t$. When we perform ray-object intersection tests, we're essentially solving for the values of $t$ where the ray equation equals points on the object's surface. The parameter $t$ thus serves multiple purposes: it tells us whether an intersection exists (real, positive values of $t$), where the intersection occurs (the 3D point $\mathbf{P}(t)$), and which intersection is closest to the ray origin (the smallest positive $t$).
+
+In practical implementations, we often need to restrict the valid range of $t$ values. For example, we might only want intersections between $t_{min}$ and $t_{max}$, where $t_{min} > 0$ prevents self-intersections due to numerical errors, and $t_{max}$ limits the ray to a specific distance. This range restriction is crucial for shadow rays, where we only care about intersections between the surface and the light source, not beyond.
+
+The ray structure in code typically contains more than just the origin and direction. A practical ray representation might include:
+
+\begin{verbatim}
+typedef struct {
+    vec3 origin;      // Starting point of the ray
+    vec3 direction;   // Direction vector (usually normalized)
+    float t_min;      // Minimum valid t value
+    float t_max;      // Maximum valid t value
+    float time;       // Time value for motion blur
+    int depth;        // Recursion depth for ray tree
+} Ray;
+\end{verbatim}
+
+The direction vector is usually normalized (unit length) for computational convenience, though this is not strictly necessary. Normalized directions simplify many calculations, such as computing the cosine of angles using dot products. However, some algorithms may use non-normalized directions for specific purposes, such as differentials for texture filtering or importance sampling.
+
+Understanding the ray parameter $t$ is crucial for implementing correct intersection algorithms. The value of $t$ represents the distance along the ray when the direction is normalized, making it directly usable for depth comparisons and distance calculations. When testing multiple objects for intersection, we typically maintain the closest intersection found so far and update it only when we find a closer one (smaller positive $t$). This nearest-intersection logic is fundamental to determining visibility in ray tracing.
+
+\subsubsection{The Rendering Equation}
+
+The rendering equation, formulated by James Kajiya in 1986, provides the mathematical foundation for all physically-based rendering techniques, including path tracing. This integral equation describes the equilibrium of light energy in a scene and encompasses all possible light interactions including direct illumination, indirect illumination, reflections, refractions, and every other lighting phenomenon we observe in the real world.
+
+The rendering equation is expressed as:
+
+\begin{equation}
+L_o(\mathbf{x}, \omega_o) = L_e(\mathbf{x}, \omega_o) + \int_{\Omega} f_r(\mathbf{x}, \omega_i, \omega_o) L_i(\mathbf{x}, \omega_i) (\omega_i \cdot \mathbf{n}) \, d\omega_i
+\end{equation}
+
+Let's break down each component of this equation to understand its physical meaning:
+
+\begin{itemize}
+    \item $L_o(\mathbf{x}, \omega_o)$ represents the outgoing radiance from point $\mathbf{x}$ in direction $\omega_o$. This is what we're trying to compute—the amount of light leaving a surface point toward the camera or another surface.
+
+    \item $L_e(\mathbf{x}, \omega_o)$ is the emitted radiance from point $\mathbf{x}$ in direction $\omega_o$. This term is non-zero only for light sources and represents the light that the surface generates itself rather than reflecting from other sources.
+
+    \item $\int_{\Omega}$ denotes integration over the hemisphere $\Omega$ above the surface point. This integral captures the contribution of light arriving from all possible directions in the hemisphere.
+
+    \item $f_r(\mathbf{x}, \omega_i, \omega_o)$ is the Bidirectional Reflectance Distribution Function (BRDF), which describes how light is reflected at the surface. It tells us what fraction of light coming from direction $\omega_i$ is reflected toward direction $\omega_o$.
+
+    \item $L_i(\mathbf{x}, \omega_i)$ is the incoming radiance at point $\mathbf{x}$ from direction $\omega_i$. This is the light arriving at the surface from other surfaces or light sources.
+
+    \item $(\omega_i \cdot \mathbf{n})$ is the cosine term, representing the dot product between the incoming light direction and the surface normal. This accounts for the geometric foreshortening effect—light arriving at grazing angles illuminates a larger surface area and thus contributes less radiance per unit area.
+\end{itemize}
+
+The profound insight of the rendering equation is that it's recursive: the incoming radiance $L_i$ at one point is the outgoing radiance $L_o$ from another point in the scene. This recursion captures the infinite bounces of light that create complex illumination effects like color bleeding and caustics. When red light bounces off a red wall onto a white ceiling, turning it slightly pink, this is the rendering equation's recursive nature at work.
+
+The challenge in solving the rendering equation lies in its recursive integral form. The incoming radiance $L_i(\mathbf{x}, \omega_i)$ at a point depends on the outgoing radiance from all other visible points in the scene, which in turn depends on their incoming radiance, creating an infinite system of interdependent equations. Analytical solutions exist only for extremely simple scenes, making numerical methods essential for practical rendering.
+
+This is where Monte Carlo integration becomes invaluable. Instead of trying to evaluate the integral exactly, we approximate it by randomly sampling directions in the hemisphere and averaging their contributions. With enough samples, this stochastic approach converges to the correct solution, though the convergence rate is relatively slow ($O(1/\sqrt{n})$ for $n$ samples), which is why path tracing requires many samples per pixel to produce noise-free images.
+
+The rendering equation also reveals why certain lighting effects are challenging to compute efficiently. Direct illumination (light that travels directly from a light source to a surface to the camera) involves only one bounce and is relatively straightforward to compute. However, indirect illumination involves multiple bounces, requiring recursive evaluation of the rendering equation. Each additional bounce adds another level of integration, exponentially increasing the computational complexity. This is why global illumination has historically been so expensive to compute and why approximations and caching schemes have been developed for real-time applications.
+
+Understanding the rendering equation is crucial for implementing a path tracer because it provides the theoretical foundation for every implementation decision. The way we sample rays, the importance sampling strategies we employ, the Russian roulette termination criteria we use—all of these techniques are motivated by the need to efficiently evaluate this fundamental equation. When you implement your path tracer, you're essentially building a Monte Carlo estimator for the rendering equation, transforming abstract mathematical concepts into concrete algorithms that produce beautiful, physically accurate images.

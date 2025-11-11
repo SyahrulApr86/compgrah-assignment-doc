@@ -1,0 +1,49 @@
+\subsection{BVH Acceleration Structure}
+
+The computational bottleneck in any ray tracer lies in the ray-primitive intersection tests. A naive implementation that tests every ray against every primitive in the scene exhibits O(N) complexity per ray, where N is the number of primitives. For a scene with millions of triangles and billions of rays, this quadratic scaling becomes prohibitively expensive. Acceleration structures transform this linear search into a logarithmic one, reducing intersection tests from millions to mere dozens per ray. Among the various acceleration structures developed over decades of research—uniform grids, octrees, kd-trees, and bounding volume hierarchies—the BVH has emerged as the de facto standard for production ray tracing due to its robust performance across diverse scenes, straightforward construction, and efficient memory usage.
+
+
+\subsubsection{Spatial Acceleration Structures}
+
+Spatial acceleration structures organize scene geometry to enable rapid rejection of large groups of primitives that cannot possibly intersect with a given ray. The fundamental principle underlying all acceleration structures is the exploitation of spatial coherence: primitives near each other in 3D space are grouped together, allowing entire groups to be culled with a single test. This hierarchical culling transforms the ray tracing problem from testing every primitive to traversing a tree structure, where each node test eliminates entire subtrees from consideration.
+
+The landscape of acceleration structures can be broadly categorized into spatial subdivisions and object hierarchies. Spatial subdivision schemes like uniform grids, octrees, and kd-trees partition space into regions, with primitives assigned to the regions they overlap. These structures excel at handling uniformly distributed geometry but struggle with varying primitive densities—a common characteristic of real-world scenes where detail varies dramatically across the model. Object hierarchies like BVHs, by contrast, adapt to the geometry distribution by grouping primitives based on their spatial proximity rather than fixed space partitions. This adaptive nature makes BVHs particularly robust for production use, handling everything from architectural models with vast empty spaces to dense vegetation with millions of leaves.
+
+The choice of acceleration structure profoundly impacts both build time and traversal performance. Grid structures offer O(1) build time but suffer from poor traversal performance in scenes with non-uniform primitive distributions. Kd-trees provide excellent traversal performance through adaptive spatial splitting but require complex construction algorithms and can suffer from numerical robustness issues at primitive boundaries. BVHs strike a practical balance: reasonable build times, robust traversal performance, and straightforward implementation. Moreover, BVHs naturally support dynamic scenes through refitting operations, making them suitable for animated content where rebuilding the entire structure every frame would be prohibitive.
+
+Memory considerations further favor BVHs in production environments. While grids can require excessive memory for sparse scenes and kd-trees need careful memory management for split primitives, BVHs maintain a simple one-to-one relationship between primitives and leaf nodes. Each primitive appears exactly once in the hierarchy, simplifying memory management and enabling straightforward parallel construction algorithms. The tree structure itself requires only two child pointers and a bounding box per internal node, resulting in predictable memory usage of approximately 2N-1 nodes for N primitives.
+
+\subsubsection{Bounding Volume Hierarchy (BVH)}
+
+A Bounding Volume Hierarchy organizes geometric primitives into a tree structure where each node contains a bounding volume that encloses all geometry in its subtree. The elegance of the BVH lies in its conceptual simplicity: if a ray doesn't intersect a node's bounding volume, it cannot intersect any geometry within that node's subtree. This observation enables rapid culling of large portions of the scene with simple ray-box intersection tests, which are significantly faster than ray-triangle or ray-sphere tests. The hierarchical nature means that successful culling at higher tree levels eliminates exponentially more primitives from consideration.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{bvh.png}
+    \label{fig:placeholder}
+\end{figure}
+
+
+The choice of bounding volume shape represents a fundamental design decision in BVH construction. Axis-aligned bounding boxes (AABBs) have become the universal choice due to their optimal balance of tightness and computational efficiency. Ray-AABB intersection requires only six comparisons and can be implemented without branches on modern processors. Alternative bounding volumes like oriented bounding boxes (OBBs) or spheres might provide tighter bounds for certain geometry configurations but require more expensive intersection tests that negate any traversal savings. The axis-aligned constraint of AABBs, while sometimes producing looser bounds for diagonal or randomly oriented geometry, is more than compensated by the efficiency of intersection testing.
+
+The tree topology of a BVH directly impacts traversal performance. Binary BVHs, where each internal node has exactly two children, have become standard due to their simplicity and good cache behavior. Some implementations explore wider branching factors (4-way or 8-way BVHs) to reduce tree depth, but these often suffer from increased node intersection costs and poorer cache utilization. The binary structure also maps naturally to parallel construction algorithms and SIMD traversal implementations, where pairs of child nodes can be tested simultaneously using vector instructions.
+
+Quality metrics for BVH construction focus on minimizing the expected cost of ray traversal. The Surface Area Heuristic (SAH), which models the probability of ray-box intersection as proportional to surface area, has proven remarkably effective at predicting traversal cost. A well-constructed BVH using SAH typically reduces intersection tests by orders of magnitude compared to naive testing, with deeper trees generally providing better culling at the cost of increased traversal overhead. The sweet spot typically occurs when leaf nodes contain 1-4 primitives, balancing traversal depth against the cost of primitive intersection tests.
+
+
+\subsubsection{BVH Construction}
+
+The construction of an efficient BVH represents a classic optimization problem: how to partition primitives into a hierarchy that minimizes the expected cost of ray traversal. While optimal BVH construction is NP-hard, practical heuristics produce near-optimal trees in reasonable time. The Surface Area Heuristic has emerged as the gold standard, providing a principled cost model that correlates strongly with actual traversal performance.
+
+\textbf{Surface Area Heuristic (SAH):}
+
+The SAH cost model estimates traversal cost as:
+\begin{equation}
+C = C_{traverse} + P_{left} \cdot C_{left} + P_{right} \cdot C_{right}
+\end{equation}
+
+where $C_{traverse}$ represents the cost of visiting the current node, and $P_{left}$ and $P_{right}$ represent the probabilities of a ray intersecting the left and right child bounding boxes, respectively. These probabilities are approximated using the surface areas of the bounding boxes, based on the observation that uniformly distributed random rays intersect boxes with probability proportional to their surface area. This geometric probability model, while making assumptions about ray distributions that don't always hold in practice, provides robust performance across a wide variety of scenes and viewpoints.
+
+The implementation of SAH-based construction typically follows a top-down recursive approach. Starting with all primitives in the root node, the algorithm considers multiple candidate splitting planes along each axis. For each candidate split, it computes the SAH cost of the resulting partition. The split with minimum cost is selected, and the process recurses on the two child nodes. The choice of candidate splits significantly impacts both build quality and construction time. Common strategies include testing splits at primitive centroids, uniform spatial divisions, or the full set of primitive bounding box extents. The latter, while computationally expensive, often produces the highest quality trees.
+
+Practical implementations must balance tree quality against construction time. Full SAH evaluation with all possible splits produces excellent trees but can be prohibitively expensive for complex scenes. Approximate strategies like binned SAH reduce the candidate splits to a fixed number of spatial bins (typically 16-32), providing most of the quality benefit at a fraction of the cost. For extremely large scenes or real-time applications, even faster methods like median splitting or linear BVH construction may be employed, trading tree quality for construction speed. The choice of construction algorithm depends on whether the BVH is built once for multiple frames (favoring quality) or rebuilt every frame for dynamic scenes (favoring speed).

@@ -1,0 +1,246 @@
+\subsection{Materials and BRDF}
+
+The appearance of objects in the physical world emerges from the complex interaction between light and matter at the microscopic scale. When light strikes a surface, photons interact with the material's atomic structure through absorption, reflection, and transmission processes that depend on the material's chemical composition, surface structure, and electromagnetic properties. In computer graphics, we abstract these intricate physical phenomena into mathematical models called Bidirectional Reflectance Distribution Functions (BRDFs) that capture the essential characteristics of how materials scatter light while remaining computationally tractable for rendering algorithms.
+
+\subsubsection{Bidirectional Reflectance Distribution Function (BRDF)}
+
+The Bidirectional Reflectance Distribution Function stands as one of the fundamental concepts in physically-based rendering, providing a mathematical framework for describing how light reflects off opaque surfaces. The BRDF encodes the relationship between incoming and outgoing light at a surface point, answering the essential question: given light arriving from a particular direction, how much of that light is reflected toward another specific direction? This function forms the cornerstone of the rendering equation, determining the appearance of every non-emissive surface in our scenes.
+
+Formally, the BRDF $f_r(\omega_i, \omega_o)$ is defined as the ratio of differential radiance reflected in direction $\omega_o$ to the differential irradiance arriving from direction $\omega_i$:
+
+\begin{equation}
+f_r(\omega_i, \omega_o) = \frac{dL_o(\omega_o)}{dE_i(\omega_i)} = \frac{dL_o(\omega_o)}{L_i(\omega_i) \cos\theta_i \, d\omega_i}
+\end{equation}
+
+where $L_o$ is the outgoing radiance, $L_i$ is the incoming radiance, $\theta_i$ is the angle between the incoming direction and the surface normal, and $d\omega_i$ is the differential solid angle. The units of BRDF are inverse steradians (sr$^{-1}$), representing a distribution rather than a simple ratio.
+
+For a BRDF to be physically plausible, it must satisfy several fundamental properties rooted in physics. The first and most critical is energy conservation: a surface cannot reflect more light than it receives. Mathematically, this constraint requires that the integral of the BRDF over all outgoing directions, weighted by the cosine term, must not exceed unity:
+
+\begin{equation}
+\int_{\Omega} f_r(\omega_i, \omega_o) \cos\theta_o \, d\omega_o \leq 1
+\end{equation}
+
+This inequality ensures that our materials don't artificially brighten the scene by creating energy from nothing, a common artifact in early computer graphics when ad-hoc shading models violated energy conservation.
+
+The second fundamental property is Helmholtz reciprocity, which states that the BRDF must be symmetric with respect to the interchange of incoming and outgoing directions:
+
+\begin{equation}
+f_r(\omega_i, \omega_o) = f_r(\omega_o, \omega_i)
+\end{equation}
+
+This reciprocity principle emerges from the time-reversibility of electromagnetic radiation and has profound implications for rendering algorithms. It ensures that light paths can be traced equally well in either direction, enabling bidirectional path tracing algorithms and guaranteeing consistent results regardless of whether we trace rays from lights or cameras.
+
+The BRDF must also be non-negative for all direction pairs, as negative reflectance has no physical meaning. While this seems obvious, it becomes a practical concern when implementing approximate or phenomenological BRDF models that might produce negative values due to numerical errors or extrapolation beyond their valid parameter ranges.
+
+\subsubsection{Lambertian (Diffuse) Materials}
+
+Lambertian materials represent the idealized model of perfectly diffuse reflection, where incident light is scattered equally in all directions regardless of the viewing angle. Named after Johann Heinrich Lambert who described this reflection model in the 18th century, Lambertian surfaces appear equally bright from all viewing directions, a property we observe approximately in materials like chalk, matte paint, and unfinished wood. While no real material is perfectly Lambertian, this model serves as an excellent approximation for many rough surfaces and forms the foundation for more complex material models.
+
+The Lambertian BRDF is remarkably simple, consisting of a constant value that depends only on the surface's albedo (its inherent color or reflectance):
+
+\begin{equation}
+f_r^{\text{Lambert}} = \frac{\rho}{\pi}
+\end{equation}
+
+where $\rho$ is the albedo, typically represented as an RGB color with each component in the range [0,1]. The factor of $\pi$ in the denominator ensures energy conservation. To understand why this specific normalization is needed, consider that when we integrate the Lambertian BRDF over the hemisphere with the required cosine weighting:
+
+\begin{equation}
+\int_{\Omega} \frac{\rho}{\pi} \cos\theta \, d\omega = \rho \int_0^{2\pi} \int_0^{\pi/2} \frac{1}{\pi} \cos\theta \sin\theta \, d\theta \, d\phi = \rho
+\end{equation}
+
+This integration yields exactly $\rho$, confirming that a white Lambertian surface ($\rho = 1$) reflects all incident light, while colored surfaces reflect only their respective color components.
+
+The physical intuition behind Lambertian reflection relates to surface microstructure. At the microscopic scale, a Lambertian surface consists of countless tiny facets oriented randomly in all directions. When light hits these microfacets, it bounces in random directions determined by the local facet orientation. Since the facets are uniformly distributed over all orientations, the aggregate effect is uniform scattering in all directions. This microscopic chaos averages out to the simple macroscopic behavior described by Lambert's law.
+
+Implementing Lambertian materials in a path tracer requires both evaluation and sampling routines. The evaluation is trivial—simply return $\rho/\pi$ for any valid direction pair. The sampling strategy, however, deserves careful attention for optimal performance. While we could sample directions uniformly over the hemisphere, this would ignore the cosine term in the rendering equation, leading to high variance. Instead, we use cosine-weighted hemisphere sampling, which generates directions with probability proportional to $\cos\theta$:
+
+\begin{equation}
+p(\omega) = \frac{\cos\theta}{\pi}
+\end{equation}
+
+This importance sampling strategy can be implemented elegantly using the Malley's method: generate uniform random points on a unit disk, then project them onto the hemisphere. The resulting directions naturally follow the cosine distribution:
+
+\begin{verbatim}
+vec3 sample_cosine_hemisphere(RNG* rng) {
+    float r = sqrt(rng_float(rng));
+    float theta = 2 * PI * rng_float(rng);
+    float x = r * cos(theta);
+    float y = r * sin(theta);
+    float z = sqrt(max(0, 1 - x*x - y*y));
+    return vec3_create(x, y, z);
+}
+\end{verbatim}
+
+The beauty of cosine-weighted sampling for Lambertian materials lies in the cancellation that occurs in the Monte Carlo estimator. The BRDF value $\rho/\pi$, the cosine term $\cos\theta$, and the probability density $\cos\theta/\pi$ combine to yield simply $\rho$, regardless of the sampled direction. This perfect importance sampling eliminates directional variance, leaving only the variance from different path contributions.
+
+\subsubsection{Metallic Materials}
+
+Metallic materials exhibit fundamentally different optical properties from dielectrics due to their abundance of free electrons that can respond to electromagnetic fields. When light strikes a metal surface, these mobile electrons oscillate in response to the electric field, re-radiating electromagnetic waves that we perceive as reflection. This electronic response gives metals their characteristic properties: high reflectivity, wavelength-dependent reflection that creates colored metals like gold and copper, and complete opacity even in thin layers. Understanding and modeling these properties accurately is essential for achieving photorealistic rendering of metallic objects.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/metal.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The ideal metal exhibits perfect specular reflection, where incident light bounces off the surface following the law of reflection: the angle of incidence equals the angle of reflection, with both angles measured relative to the surface normal. For a perfect mirror, the BRDF is a delta function:
+
+\begin{equation}
+f_r^{\text{mirror}}(\omega_i, \omega_o) = \frac{F(\omega_i, n)}{\cos\theta_i} \delta(\omega_o - \omega_r)
+\end{equation}
+
+where $\omega_r = 2(\omega_i \cdot n)n - \omega_i$ is the perfect reflection direction, and $F(\omega_i, n)$ is the Fresnel reflectance. The delta function ensures that light is reflected only in the perfect mirror direction, making this BRDF unsuitable for standard Monte Carlo sampling. Instead, we handle perfect mirrors by deterministically generating the reflection ray.
+
+Real metals are never perfectly smooth at the microscopic scale. Surface irregularities, oxidation, and manufacturing processes create microscopic roughness that scatters reflected light into a cone around the perfect reflection direction. This roughness transforms the sharp specular reflection into a broader, softer highlight. We model this phenomenon by introducing a roughness parameter that controls the spread of the reflection lobe. A roughness of zero corresponds to a perfect mirror, while increasing roughness creates increasingly diffuse specular reflection.
+
+The implementation of rough metallic reflection typically uses microfacet theory, which models the surface as a collection of tiny mirror facets with varying orientations. The distribution of facet orientations determines the appearance of the reflection. The most common distribution is the GGX (Trowbridge-Reitz) distribution:
+
+\begin{equation}
+D(\omega_h) = \frac{\alpha^2}{\pi((\omega_h \cdot n)^2(\alpha^2 - 1) + 1)^2}
+\end{equation}
+
+where $\omega_h$ is the half-vector between the incident and outgoing directions, and $\alpha$ is the roughness parameter. This distribution produces realistic highlights with a bright core and extended tails that match observed materials well.
+
+The complete BRDF for rough metals combines the microfacet distribution with geometric shadowing/masking terms and the Fresnel reflectance:
+
+\begin{equation}
+f_r^{\text{metal}} = \frac{D(\omega_h)G(\omega_i, \omega_o)F(\omega_i, \omega_h)}{4\cos\theta_i\cos\theta_o}
+\end{equation}
+
+where $G$ is the geometric term accounting for microfacet self-shadowing. While this complete model provides accurate results, simpler approximations often suffice for basic path tracing.
+
+For path tracing implementation, we can use a simplified approach that captures the essential behavior of metallic reflection without the full complexity of microfacet theory. We generate scattered rays by perturbing the perfect reflection direction with random offsets scaled by the roughness parameter:
+
+\begin{verbatim}
+vec3 sample_rough_metal(vec3 incident, vec3 normal, float roughness, RNG* rng) {
+    vec3 reflected = vec3_reflect(incident, normal);
+    vec3 fuzz = vec3_scale(rng_in_unit_sphere(rng), roughness);
+    return vec3_normalize(vec3_add(reflected, fuzz));
+}
+\end{verbatim}
+
+This approximation, while not physically accurate, produces visually plausible results and is simple to implement and understand. The roughness parameter directly controls the cone angle of scattered rays, with zero producing perfect reflection and one creating nearly diffuse reflection.
+
+The Fresnel effect for metals is particularly important, as it determines how reflectivity varies with angle. Unlike dielectrics where Fresnel effects are subtle except at grazing angles, metals exhibit strong wavelength-dependent Fresnel behavior even at normal incidence. This wavelength dependence is what gives metals like gold and copper their characteristic colors. For simple path tracers, we often approximate this with a constant base reflectivity (the F0 value) that represents the metal's color, though more sophisticated implementations use the full complex index of refraction to compute accurate Fresnel values.
+
+\subsubsection{Dielectric Materials}
+
+Dielectric materials—transparent substances like glass, water, and diamond—present unique challenges and opportunities in path tracing due to their ability to both reflect and transmit light. The term "dielectric" originates from their electrical properties as insulators, but in graphics, it refers to any transparent material where light can pass through. The interplay between reflection and refraction at dielectric interfaces creates compelling visual effects: the sparkle of diamonds, the distortion seen through water, and the complex caustic patterns cast by glass objects. Accurately modeling these phenomena requires understanding Snell's law, Fresnel equations, and the careful handling of total internal reflection.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/dielectric.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The fundamental behavior of dielectrics is governed by Snell's law, which describes how light bends when passing between media with different indices of refraction:
+
+\begin{equation}
+n_1 \sin\theta_1 = n_2 \sin\theta_2
+\end{equation}
+
+where $n_1$ and $n_2$ are the refractive indices of the two media, and $\theta_1$ and $\theta_2$ are the angles of incidence and refraction relative to the surface normal. The refractive index measures how much light slows down in a medium compared to vacuum, with typical values being 1.0 for air, 1.33 for water, 1.5 for glass, and 2.4 for diamond. This speed change causes light rays to bend at interfaces, creating the magnification and distortion effects we associate with transparent objects.
+
+The direction of the refracted ray can be computed using the vector form of Snell's law:
+
+\begin{equation}
+\omega_t = \frac{n_1}{n_2}(\omega_i + \cos\theta_i \cdot n) - n\sqrt{1 - \left(\frac{n_1}{n_2}\right)^2(1 - \cos^2\theta_i)}
+\end{equation}
+
+This formula assumes the normal points into the medium from which the ray arrives. The term under the square root becomes negative when total internal reflection occurs—a phenomenon unique to rays traveling from a denser to a less dense medium at angles beyond the critical angle.
+
+Total internal reflection occurs when the angle of incidence exceeds the critical angle $\theta_c = \arcsin(n_2/n_1)$ for $n_1 > n_2$. At angles greater than this critical angle, no refraction is possible, and all light is reflected. This phenomenon is responsible for the bright reflections seen at the water surface when viewed from below and enables fiber optic cables to guide light over long distances. In path tracing, we must detect this condition and switch from refraction to reflection when it occurs.
+
+The Fresnel equations determine what fraction of light is reflected versus transmitted at a dielectric interface. For unpolarized light (which we assume in most renderers), the Fresnel reflectance can be computed as:
+
+\begin{equation}
+F = \frac{1}{2}\left[\left(\frac{n_1\cos\theta_i - n_2\cos\theta_t}{n_1\cos\theta_i + n_2\cos\theta_t}\right)^2 + \left(\frac{n_1\cos\theta_t - n_2\cos\theta_i}{n_1\cos\theta_t + n_2\cos\theta_i}\right)^2\right]
+\end{equation}
+
+This exact formula is computationally expensive, so Schlick's approximation is commonly used:
+
+\begin{equation}
+F \approx F_0 + (1 - F_0)(1 - \cos\theta_i)^5
+\end{equation}
+
+where $F_0 = ((n_1 - n_2)/(n_1 + n_2))^2$ is the reflectance at normal incidence. This approximation is remarkably accurate for most common materials and significantly faster to compute.
+
+Implementing dielectric materials in a path tracer requires making a discrete choice between reflection and refraction for each ray interaction. Since we can only follow one path in standard path tracing, we randomly choose between reflection and refraction with probabilities based on the Fresnel reflectance:
+
+\begin{verbatim}
+bool sample_dielectric(Ray* ray, HitRecord* hit, vec3* attenuation,
+                       Ray* scattered, RNG* rng) {
+    float ior = hit->material->ior;
+    float ratio = hit->front_face ? (1.0 / ior) : ior;
+
+    vec3 unit_direction = vec3_normalize(ray->direction);
+    float cos_theta = fmin(-vec3_dot(unit_direction, hit->normal), 1.0);
+    float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+    // Check for total internal reflection
+    bool cannot_refract = ratio * sin_theta > 1.0;
+    vec3 direction;
+
+    if (cannot_refract || schlick(cos_theta, ratio) > rng_float(rng)) {
+        direction = vec3_reflect(unit_direction, hit->normal);
+    } else {
+        direction = vec3_refract(unit_direction, hit->normal, ratio);
+    }
+
+    *scattered = ray_create(hit->point, direction);
+    *attenuation = vec3_create(1, 1, 1);  // No absorption
+    return true;
+}
+\end{verbatim}
+
+This stochastic approach naturally produces the correct ratio of reflected to refracted light over many samples, though it increases variance compared to deterministically tracing both paths and weighting them appropriately.
+
+
+\subsubsection{Emissive Materials}
+
+Emissive materials serve as the light sources in path traced scenes, injecting energy into the system that ultimately illuminates all other surfaces through direct and indirect lighting. Unlike traditional computer graphics where lights are separate entities with special handling, path tracing treats emissive materials as regular scene geometry that happens to emit radiance. This unified approach elegantly handles area lights of arbitrary shape, naturally produces soft shadows, and correctly accounts for indirect illumination from glowing surfaces. Every path traced image ultimately derives its illumination from emissive materials, making their proper implementation crucial for both physical accuracy and artistic control.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/emissive.png}
+    \label{fig:placeholder}
+\end{figure}
+
+The emission from a surface is characterized by its emitted radiance $L_e$, which can vary with position, direction, and wavelength. For the simple case of a uniform diffuse emitter (like a uniformly glowing sphere or plane), the emitted radiance is constant in all directions:
+
+\begin{equation}
+L_e(\mathbf{x}, \omega) = E
+\end{equation}
+
+where $E$ is the emission strength, typically specified as an RGB color representing the spectral radiance. More sophisticated emitters might exhibit directional variation, such as spot lights that concentrate emission in particular directions, though these require more complex emission profiles.
+
+The power (flux) emitted by an area light is the integral of radiance over all directions and surface area:
+
+\begin{equation}
+\Phi = \int_A \int_{\Omega} L_e(\mathbf{x}, \omega) \cos\theta \, d\omega \, dA
+\end{equation}
+
+For a diffuse emitter with area $A$ and emission $E$, this yields $\Phi = \pi A E$. This relationship helps when specifying lights by their total power output rather than radiance, ensuring physically meaningful brightness relationships between lights of different sizes.
+
+In path tracing implementation, emissive materials require special handling to avoid infinite recursion and ensure energy conservation. When a ray hits an emissive surface, we don't scatter new rays from that point—emission is a source, not a scattering event. The path tracing algorithm must detect emissive materials and add their contribution to the accumulated radiance:
+
+\begin{verbatim}
+if (hit.material->type == MATERIAL_EMISSIVE) {
+    // Only emit light on the front face (optional)
+    if (hit.front_face) {
+        return hit.material->emission;
+    }
+    return vec3_create(0, 0, 0);
+}
+\end{verbatim}
+
+This simple approach works but raises important design decisions. Should emissive surfaces emit from both sides or only the front? Should they also reflect light from other sources, or are they purely emissive? These choices affect both the physical plausibility and artistic utility of the lighting system.
+
+The relationship between emissive materials and the rendering equation deserves careful consideration. The rendering equation separates emitted radiance $L_e$ from reflected radiance:
+
+\begin{equation}
+L_o(\mathbf{x}, \omega_o) = L_e(\mathbf{x}, \omega_o) + \int_{\Omega} f_r(\mathbf{x}, \omega_i, \omega_o) L_i(\mathbf{x}, \omega_i) \cos\theta_i \, d\omega_i
+\end{equation}
+
+This separation means emissive surfaces contribute to the image in two ways: directly, when visible to the camera, and indirectly, by illuminating other surfaces. The path tracer naturally handles both contributions through its recursive evaluation of the rendering equation.
+

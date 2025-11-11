@@ -1,0 +1,50 @@
+\subsection{Code Flow Overview}
+
+The provided C codebase implements a complete path tracing framework with GTK3 GUI. The architecture cleanly separates implemented infrastructure (GUI, threading, memory management) from student tasks (ray tracing algorithms, materials, intersections, BVH), allowing students to focus on graphics algorithms without system programming complexities.
+
+\subsubsection{Architecture and Module Organization}
+
+The codebase consists of three layers:
+\begin{itemize}
+\item \textbf{GUI Layer} (\texttt{gui.c}): Handles user interaction and scene selection
+\item \textbf{Rendering Layer}: Manages OpenMP parallelization across CPU cores
+\item \textbf{Path Tracing Engine}: Core algorithms in \texttt{pathtracer.c}, \texttt{material.c}, \texttt{primitive.c}, and \texttt{bvh.c}
+\end{itemize}
+
+When rendering begins, the GUI spawns a background thread to prevent UI freezing. This thread uses OpenMP to parallelize pixel computation, with each thread independently tracing rays. Multiple samples per pixel provide antialiasing through the \texttt{trace\_ray} function, which recursively follows light paths. Results are averaged and saved as BMP files.
+
+Memory is managed through centralized allocation in scene creation and BVH construction. Stack allocation for rays and vectors avoids manual memory management in performance-critical code. Thread-local random number generators prevent contention.
+
+\subsubsection{Key Data Structures and Their Relationships}
+
+Core data structures:
+\begin{itemize}
+\item \texttt{Scene}: Container for primitives, materials, and camera configuration
+\item \texttt{Primitive}: Geometric data (sphere: center/radius, triangle: three vertices) with material index
+\item \texttt{Material}: Surface properties (type, albedo, roughness/IOR)
+\item \texttt{Ray}: Origin and direction vectors for light paths
+\item \texttt{HitRecord}: Intersection data (point, normal, material, parameter t)
+\item \texttt{BVHNode}: Tree node with AABB and child pointers or primitive index
+\end{itemize}
+
+The \texttt{vec3} type handles 3D math operations (dot, cross, normalize) with SIMD optimization handled transparently by the framework.
+
+\subsubsection{Control Flow During Rendering}
+
+Rendering flow:
+\begin{enumerate}
+\item User clicks "Render" → GUI disables controls and spawns background thread
+\item Background thread initiates OpenMP parallel region
+\item Each CPU core processes pixels independently with dynamic scheduling
+\item Per pixel: Generate multiple samples with random offsets for antialiasing
+\item Each sample calls \texttt{trace\_ray} (student implementation) which:
+   \begin{itemize}
+   \item Finds ray-scene intersection using BVH
+   \item Evaluates material properties at hit points
+   \item Computes scattered rays based on BRDF
+   \item Recursively traces with Russian roulette termination
+   \item Accumulates emission from light sources
+   \end{itemize}
+\item Average samples and save as BMP file
+\end{enumerate}
+

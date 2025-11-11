@@ -1,0 +1,22 @@
+% Material Explanation Section for Path Tracer Assignment
+% This section covers the theoretical foundations of path tracing
+
+\section{Introduction}
+
+Path tracing represents one of the most elegant and physically accurate rendering techniques in computer graphics, capable of producing photorealistic images by simulating the actual behavior of light. Unlike traditional rasterization techniques that rely on approximations and tricks to achieve realistic lighting, path tracing follows the physical laws of light transport, tracing rays of light as they bounce through a scene and interact with various materials.
+
+In this assignment, you will implement a complete path tracer from scratch, gaining hands-on experience with the fundamental algorithms that power modern production renderers used in films and visual effects. This journey will take you through the mathematical foundations of light transport, the practical algorithms for ray-object intersection, the physics of material interaction, and the statistical methods needed to solve the rendering equation efficiently.
+
+The path tracer you will build operates on a simple yet powerful principle: to determine the color of a pixel, we trace a ray from the camera through that pixel into the scene, then follow that ray as it bounces off surfaces, accumulating color and light along the way. This Monte Carlo approach, while computationally intensive, provides an unbiased solution to the rendering equation, meaning that with enough samples, it will converge to the physically correct result. Through this implementation, you will understand why path tracing has become the gold standard for photorealistic rendering in the film industry and is increasingly being adopted for real-time applications with the advent of ray tracing hardware.
+
+\input{subsections/1/1_ray_tracing_fundamentals}
+
+\input{subsections/1/2_path_tracing_theory}
+
+\input{subsections/1/3_ray_primitive_intersection}
+
+\input{subsections/1/4_material_and_brdf}
+
+\input{subsections/1/5_monte_carlo_integration}
+
+\input{subsections/1/6_bvh_acceleration}
